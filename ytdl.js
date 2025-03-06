@@ -61,7 +61,7 @@ function initializeYTDL() {
             const downloadBtn = document.createElement("a");
             downloadBtn.textContent = "⬇️";
             downloadBtn.style.color = "red";
-            downloadBtn.style.fontSize = "16px";
+            downloadBtn.style.fontSize = "32px";
             downloadBtn.style.cursor = "pointer";
             downloadBtn.addEventListener("click", openDownloadDialog);
 

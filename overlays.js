@@ -191,7 +191,7 @@ function addOverlay(selector, text, holdTime, callback) {
     button.addEventListener('complete.pressAndHold', () => {
         const overlayElements = document.querySelectorAll(`[id='${overlay.id}']`);
         overlayElements.forEach(el => el.remove());
-        
+
         // Execute callback if provided
         if (typeof callback === 'function') {
             setTimeout(callback, 0);
@@ -200,7 +200,7 @@ function addOverlay(selector, text, holdTime, callback) {
 
     overlay.appendChild(button);
     targetElement.prepend(overlay);
-    
+
     return overlay;
 }
 
@@ -248,35 +248,35 @@ function displayTime(date) {
 // Function to add individual overlays to each item
 function addIndividualOverlays(containerSelector, itemSelector, itemName) {
     console.log(`Adding individual overlays to ${itemName}`);
-    
+
     // Find the container
     const container = document.querySelector(containerSelector);
     if (!container) {
         console.log(`Container ${containerSelector} not found`);
         return;
     }
-    
+
     // Get all items
     const allItems = Array.from(container.querySelectorAll(itemSelector));
     if (allItems.length === 0) {
         console.log(`No ${itemName} found`);
         return;
     }
-    
+
     console.log(`Found ${allItems.length} ${itemName} to overlay`);
-    
+
     // Add overlay to each individual item
     allItems.forEach((item, index) => {
         // Skip items that already have an overlay
         if (item.querySelector('.individual-item-overlay')) {
             return;
         }
-        
+
         // Create a unique ID for this item if it doesn't have one
         if (!item.id) {
             item.id = `${itemName}-item-${index}-${Date.now()}`;
         }
-        
+
         // Create overlay for this item
         const overlay = document.createElement('div');
         overlay.className = 'individual-item-overlay';
@@ -295,11 +295,11 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
         overlay.style.boxSizing = 'border-box';
         overlay.style.border = '2px solid #065fd4';
         overlay.style.minHeight = '50px';
-        
+
         // Add a blur backdrop filter
         overlay.style.backdropFilter = 'blur(5px)';
         overlay.style.webkitBackdropFilter = 'blur(5px)'; // For Safari
-        
+
         // Add a semi-transparent div to further obscure content
         const blurLayer = document.createElement('div');
         blurLayer.style.position = 'absolute';
@@ -309,11 +309,11 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
         blurLayer.style.height = '100%';
         blurLayer.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
         overlay.appendChild(blurLayer);
-        
+
         // Create reveal button
         const revealButton = document.createElement('button');
         const itemType = itemName === 'comments' ? 'comment' : 'video';
-        revealButton.textContent = `Reveal this ${itemType} + 4 nearby`;
+        revealButton.textContent = `Reveal this ${itemType} and 2 below`;
         revealButton.style.whiteSpace = 'nowrap';
         revealButton.style.backgroundColor = '#065fd4';
         revealButton.style.color = 'white';
@@ -322,19 +322,19 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
         revealButton.style.padding = '8px 14px';
         revealButton.style.fontSize = '13px';
         revealButton.style.cursor = 'pointer';
-        
+
         // Add pressAndHold behavior
         revealButton.pressAndHold({ holdTime: __overlays_time });
-        
+
         // When button is held, remove this overlay and adjacent ones
         revealButton.addEventListener('complete.pressAndHold', () => {
             // Remove this overlay
             overlay.remove();
-            
+
             // Find and remove adjacent overlays (2 above and 2 below)
             const allItems = Array.from(container.querySelectorAll(itemSelector));
             const currentIndex = allItems.indexOf(item);
-            
+
             // Function to get and remove adjacent overlays
             const removeAdjacentOverlays = (itemIndex, direction, count) => {
                 for (let i = 1; i <= count; i++) {
@@ -348,38 +348,37 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                     }
                 }
             };
-            
-            // Remove 2 overlays above and 2 below
-            removeAdjacentOverlays(currentIndex, -1, 2); // Remove above
+
+            // removeAdjacentOverlays(currentIndex, -1, 2); // Remove above
             removeAdjacentOverlays(currentIndex, 1, 2);  // Remove below
-            
+
             console.log(`Revealed ${itemName} item at index ${currentIndex} and adjacent items`);
         });
-        
+
         // Add button to overlay
         overlay.appendChild(revealButton);
-        
+
         // Make sure the item has position relative for proper overlay positioning
         const currentPosition = window.getComputedStyle(item).position;
         if (currentPosition === 'static') {
             item.style.position = 'relative';
         }
-        
+
         // Add overlay to the item
         item.appendChild(overlay);
     });
-    
+
     console.log(`Added overlays to ${allItems.length} ${itemName}`);
-    
+
     // Set up a mutation observer to handle newly added items
     const observer = new MutationObserver((mutations) => {
         let newItemsAdded = false;
-        
+
         mutations.forEach(mutation => {
             if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                 for (const node of mutation.addedNodes) {
                     // Check if this is an item or contains items
-                    if ((node.matches && node.matches(itemSelector)) || 
+                    if ((node.matches && node.matches(itemSelector)) ||
                         (node.querySelector && node.querySelector(itemSelector))) {
                         newItemsAdded = true;
                         break;
@@ -387,20 +386,20 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                 }
             }
         });
-        
+
         if (newItemsAdded) {
             console.log(`New ${itemName} detected, adding overlays`);
             setTimeout(() => {
                 // Find items without overlays
                 const newItems = Array.from(container.querySelectorAll(itemSelector))
                     .filter(item => !item.querySelector('.individual-item-overlay'));
-                
+
                 newItems.forEach((item, index) => {
                     // Create item ID
                     if (!item.id) {
                         item.id = `${itemName}-item-new-${index}-${Date.now()}`;
                     }
-                    
+
                     // Create overlay
                     const overlay = document.createElement('div');
                     overlay.className = 'individual-item-overlay';
@@ -419,11 +418,11 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                     overlay.style.boxSizing = 'border-box';
                     overlay.style.border = '2px solid #065fd4';
                     overlay.style.minHeight = '50px';
-                    
+
                     // Add a blur backdrop filter
                     overlay.style.backdropFilter = 'blur(5px)';
                     overlay.style.webkitBackdropFilter = 'blur(5px)'; // For Safari
-                    
+
                     // Add a semi-transparent div to further obscure content
                     const blurLayer = document.createElement('div');
                     blurLayer.style.position = 'absolute';
@@ -433,7 +432,7 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                     blurLayer.style.height = '100%';
                     blurLayer.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
                     overlay.appendChild(blurLayer);
-                    
+
                     // Create reveal button
                     const revealButton = document.createElement('button');
                     const itemType = itemName === 'comments' ? 'comment' : 'video';
@@ -446,19 +445,19 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                     revealButton.style.padding = '8px 14px';
                     revealButton.style.fontSize = '13px';
                     revealButton.style.cursor = 'pointer';
-                    
+
                     // Add pressAndHold behavior
                     revealButton.pressAndHold({ holdTime: __overlays_time });
-                    
+
                     // When button is held, remove this overlay and adjacent ones
                     revealButton.addEventListener('complete.pressAndHold', () => {
                         // Remove this overlay
                         overlay.remove();
-                        
+
                         // Find and remove adjacent overlays (2 above and 2 below)
                         const allItems = Array.from(container.querySelectorAll(itemSelector));
                         const currentIndex = allItems.indexOf(item);
-                        
+
                         // Function to get and remove adjacent overlays
                         const removeAdjacentOverlays = (itemIndex, direction, count) => {
                             for (let i = 1; i <= count; i++) {
@@ -472,38 +471,38 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                                 }
                             }
                         };
-                        
+
                         // Remove 2 overlays above and 2 below
                         removeAdjacentOverlays(currentIndex, -1, 2); // Remove above
                         removeAdjacentOverlays(currentIndex, 1, 2);  // Remove below
-                        
+
                         console.log(`Revealed ${itemName} item at index ${currentIndex} and adjacent items`);
                     });
-                    
+
                     // Add button to overlay
                     overlay.appendChild(revealButton);
-                    
+
                     // Make sure the item has position relative for proper overlay positioning
                     const currentPosition = window.getComputedStyle(item).position;
                     if (currentPosition === 'static') {
                         item.style.position = 'relative';
                     }
-                    
+
                     // Add overlay to the item
                     item.appendChild(overlay);
                 });
-                
+
                 console.log(`Added overlays to ${newItems.length} new ${itemName}`);
             }, 100);
         }
     });
-    
+
     // Start observing the container for changes
     observer.observe(container, {
         childList: true,
         subtree: true
     });
-    
+
     return observer;
 }
 
