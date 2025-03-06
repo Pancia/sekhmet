@@ -1,0 +1,18 @@
+{
+    "manifest_version": 2,
+    "name": "YouTube Enhancer",
+    "description": "Enhances YouTube with download links, feeling tracker, and content overlays",
+    "version": "1.0",
+    "browser_specific_settings": {
+        "gecko": {
+            "strict_min_version": "54.0a1"
+        }
+    },
+    "permissions": ["storage", "tabs"],
+    "content_scripts": [
+        {
+            "matches": ["*://*.youtube.com/*"],
+            "js": ["ytdl.js", "overlays.js", "feeling-tracker.js", "index.js"]
+        }
+    ]
+}
