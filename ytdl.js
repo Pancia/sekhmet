@@ -1,7 +1,3 @@
-// Firefox Extension port of ytdl.js
-// Ported from Greasemonkey script to WebExtension format
-
-// YTDL functionality
 function YTDL(downloadType) {
     function saveFile(filename, data) {
         const file = new Blob([data], {type: "text/plain"});
@@ -21,20 +17,7 @@ function YTDL(downloadType) {
     saveFile(fileName+`.${downloadType}.ytdl`, "ytdl gen, please ignore");
 }
 
-function waitForElementToBeLoaded(selector, callback) {
-    const tid = setInterval(function() {
-        // wait for x element to have been loaded, ie: not null
-        const x = document.querySelector(selector);
-        if (x == null) { return; }
-        // x was loaded, go ahead!
-        clearInterval(tid);
-        callback();
-    }, 100);
-}
-
-// Initialize YTDL functionality
 function initializeYTDL() {
-    // Only run on YouTube
     if (window.location.hostname !== "www.youtube.com") {
         return;
     }
@@ -59,7 +42,7 @@ function initializeYTDL() {
 
             // Create main download button
             const downloadBtn = document.createElement("a");
-            downloadBtn.textContent = "⬇️";
+            downloadBtn.textContent = "📽️";
             downloadBtn.style.color = "red";
             downloadBtn.style.fontSize = "32px";
             downloadBtn.style.cursor = "pointer";
@@ -69,7 +52,7 @@ function initializeYTDL() {
 
             const endContainer = document.querySelector("#center.ytd-masthead");
             if (endContainer) {
-                endContainer.appendChild(ytdlContainer);
+                endContainer.prepend(ytdlContainer);
             }
         });
     });
@@ -190,13 +173,4 @@ function initializeYTDL() {
 
         document.body.appendChild(dialogBackdrop);
     }
-}
-
-// Export functions for use in index.js
-if (typeof module !== 'undefined') {
-    module.exports = {
-        initializeYTDL,
-        YTDL,
-        waitForElementToBeLoaded
-    };
 }

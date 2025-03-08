@@ -8,15 +8,18 @@
             "strict_min_version": "54.0a1"
         }
     },
-    "permissions": ["storage", "tabs"],
+    "background": {
+        "scripts": ["background.js"]
+    },
+    "permissions": ["storage", "tabs", "menus", "contextMenus"],
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],
-            "js": ["ytdl.js", "overlays.js", "feeling-tracker.js", "index.js"]
+            "js": ["lib.js", "ytdl.js", "overlays.js", "feeling-tracker.js", "youtube.js", "index.js"]
         },
         {
             "matches": ["*://*.duckduckgo.com/*"],
-            "js": ["google-it.js"]
+            "js": ["lib.js", "google-it.js"]
         }
     ]
 }

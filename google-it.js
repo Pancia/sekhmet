@@ -1,14 +1,3 @@
-function waitForElementToBeLoaded(selector, callback) {
-    const tid = setInterval(function() {
-        // wait for x element to have been loaded, ie: not null
-        const x = document.querySelector(selector);
-        if (x == null) { return; }
-        // x was loaded, go ahead!
-        clearInterval(tid);
-        callback(x);
-    }, 100);
-}
-
 function initializeGoogleIt() {
     console.log("GOOGLE IT")
     waitForElementToBeLoaded("#react-duckbar", (duckbar) => {
