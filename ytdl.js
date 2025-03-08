@@ -38,11 +38,13 @@ function initializeYTDL() {
     // Add a single download button near avatar that opens a dialog with download options
     waitForElementToBeLoaded("#center.ytd-masthead", () => {
         waitForElementToBeLoaded("#avatar-btn", () => {
+            document.querySelectorAll("#ytdl").forEach(i => i.remove());
+
             const ytdlContainer = document.createElement("div");
 
-            // Create main download button
             const downloadBtn = document.createElement("a");
             downloadBtn.textContent = "📽️";
+            downloadBtn.id = "ytdl";
             downloadBtn.style.color = "red";
             downloadBtn.style.fontSize = "32px";
             downloadBtn.style.cursor = "pointer";

@@ -24,11 +24,36 @@ async function showFeelingTracker() {
     browser.tabs.sendMessage(tabId, { trigger: 'showFeelingTrackerDialog' });
 }
 
+async function toggleFeelingTracker() {
+    console.log("YTF: toggleFeelingTracker")
+    const tabInfo = await getCurrentTab();
+    const [{ id: tabId }] = tabInfo;
+    browser.tabs.sendMessage(tabId, { trigger: 'toggleFeelingTracker' });
+}
+
 browser.menus.onClicked.addListener((info, tab) => {
     console.log("YTF: menu listener")
     switch (info.menuItemId) {
         case "feeling-tracker":
             showFeelingTracker();
             break;
+        case "ytf-is-enabled":
+            toggleFeelingTracker();
+            break;
+    }
+});
+
+browser.menus.create({
+    id: "ytf-is-enabled",
+    title: "Toggle Feeling Tracker",
+    contexts: ["all"],
+}, onCreated);
+
+// Handle message for getting tab ID
+browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "getTabId") {
+        console.log("YTF: Tab ID requested", sender.tab.id);
+        sendResponse({ tabId: sender.tab.id });
+        return true; // Indicates we'll respond asynchronously
     }
 });

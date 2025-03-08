@@ -1,7 +1,5 @@
 function initializeGoogleIt() {
-    console.log("GOOGLE IT")
     waitForElementToBeLoaded("#react-duckbar", (duckbar) => {
-        console.log("GOOGLE IT: LOADED")
         document.querySelectorAll("#google-it").forEach(i => i.remove());
 
         const googleLink = document.createElement('a');

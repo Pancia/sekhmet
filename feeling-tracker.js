@@ -2,10 +2,11 @@
 // Ported from Greasemonkey script to WebExtension format
 
 // Global configuration
-const CHECK_INTERVAL_MINUTES = 5; // Check-in interval in minutes
+const CHECK_INTERVAL_MINUTES = 1; // Check-in interval in minutes
 const SESSION_TIMEOUT_MINUTES = 5; // Session timeout in minutes
 const STORAGE_KEY_PLAYTIME = 'ytf_accumulatedPlayTime';
 const STORAGE_KEY_LASTACTIVE = 'ytf_lastActiveTime';
+const STORAGE_KEY_ENABLED = 'ytf_feelingTracker_enabled';
 
 let checkIntervalMs = CHECK_INTERVAL_MINUTES * 60 * 1000;
 let sessionTimeoutMs = SESSION_TIMEOUT_MINUTES * 60 * 1000;
@@ -15,12 +16,59 @@ let videoElement = null;
 let lastPlayTimestamp = null;
 let accumulatedPlayTime = 0;
 let lastActiveTime = 0;
+let currentTabId = null;
 
-// Helper function to get values from browser storage
+// Get the current tab ID on initialization
+browser.runtime.sendMessage({ action: "getTabId" })
+  .then(response => {
+    currentTabId = response.tabId;
+    console.log(`YTF: Got current tab ID: ${currentTabId}`);
+  })
+  .catch(error => {
+    console.error(`YTF: Error getting tab ID: ${error}`);
+  });
+
+function getStorageKey(baseKey) {
+  return currentTabId ? `${baseKey}_${currentTabId}` : baseKey;
+}
+
+function isEnabled() {
+  return browser.storage.local.get(getStorageKey(STORAGE_KEY_ENABLED))
+    .then(result => {
+      const enabled = result[getStorageKey(STORAGE_KEY_ENABLED)] !== false;
+      console.log(`YTF: Feeling tracker is ${enabled ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
+      return enabled;
+    })
+    .catch(error => {
+      console.error(`YTF: Error checking if enabled: ${error}`);
+      return true; // Default to enabled if there's an error
+    });
+}
+
+function toggleEnabled() {
+  isEnabled().then(enabled => {
+    const newState = !enabled;
+    const data = {};
+    data[getStorageKey(STORAGE_KEY_ENABLED)] = newState;
+
+    return browser.storage.local.set(data)
+      .then(() => {
+        console.log(`YTF: Feeling tracker is now ${newState ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
+        alert(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'}`);
+      })
+      .catch(error => {
+        console.error(`YTF: Error toggling enabled state: ${error}`);
+      });
+  });
+}
+
 function getStoredValue(key, defaultValue) {
-    return browser.storage.local.get(key)
+    // Only use tab-specific key for the enabled setting, others are global
+    const storageKey = key === STORAGE_KEY_ENABLED ? getStorageKey(key) : key;
+    
+    return browser.storage.local.get(storageKey)
         .then(result => {
-            return result[key] !== undefined ? parseFloat(result[key]) : defaultValue;
+            return result[storageKey] !== undefined ? parseFloat(result[storageKey]) : defaultValue;
         })
         .catch(error => {
             console.error(`YTF: Error getting stored value: ${error}`);
@@ -30,8 +78,11 @@ function getStoredValue(key, defaultValue) {
 
 // Helper function to set values in browser storage
 function setStoredValue(key, value) {
+    // Only use tab-specific key for the enabled setting, others are global
+    const storageKey = key === STORAGE_KEY_ENABLED ? getStorageKey(key) : key;
+    
     let data = {};
-    data[key] = value.toString();
+    data[storageKey] = value.toString();
     return browser.storage.local.set(data)
         .catch(error => {
             console.error(`YTF: Error setting stored value: ${error}`);
@@ -135,28 +186,37 @@ function startPlayTimeTracking() {
     // Set an interval to periodically check accumulated play time
     checkTimer = setInterval(() => {
         if (videoElement && !videoElement.paused) {
-            const currentTime = Date.now();
+            // First check if the feeling tracker is enabled for this tab
+            isEnabled().then(enabled => {
+                if (!enabled) {
+                    // If disabled, don't track time at all
+                    lastPlayTimestamp = null;
+                    return;
+                }
 
-            if (lastPlayTimestamp) {
-                const additionalTime = currentTime - lastPlayTimestamp;
-                accumulatedPlayTime += additionalTime;
+                const currentTime = Date.now();
 
-                // Always update storage whenever the accumulated time changes
-                setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
-            }
+                if (lastPlayTimestamp) {
+                    const additionalTime = currentTime - lastPlayTimestamp;
+                    accumulatedPlayTime += additionalTime;
 
-            lastPlayTimestamp = currentTime;
-            updateLastActiveTime();
+                    // Always update storage whenever the accumulated time changes
+                    setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
+                }
 
-            // Check if we've reached the threshold
-            if (accumulatedPlayTime >= checkIntervalMs) {
-                showFeelingTrackerDialog();
-            }
+                lastPlayTimestamp = currentTime;
+                updateLastActiveTime();
 
-            // Only log every 5 seconds to reduce console spam
-            if (Math.round(accumulatedPlayTime / 1000) % 5 === 0) {
-                console.log(`YTF: Accumulated play time across all videos: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
-            }
+                // Check if we've reached the threshold
+                if (accumulatedPlayTime >= checkIntervalMs) {
+                    showFeelingTrackerDialog();
+                }
+
+                // Only log every 5 seconds to reduce console spam
+                if (Math.round(accumulatedPlayTime / 1000) % 5 === 0) {
+                    console.log(`YTF: Accumulated play time across all videos: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
+                }
+            });
         }
     }, 1000); // Check every second
 }
@@ -166,57 +226,90 @@ function setupVideoListeners() {
     if (!videoElement) return;
 
     videoElement.addEventListener('play', () => {
-        // Check for session timeout on play
-        checkSessionTimeout();
+        // First check if the tracker is enabled
+        isEnabled().then(enabled => {
+            if (!enabled) {
+                lastPlayTimestamp = null;
+                console.log('YTF: Video started playing but feeling tracker is disabled, not tracking time');
+                return;
+            }
 
-        // Always refresh the accumulated time from storage when play starts
-        getStoredValue(STORAGE_KEY_PLAYTIME, 0).then(storedTime => {
-            accumulatedPlayTime = storedTime;
-            lastPlayTimestamp = Date.now();
-            updateLastActiveTime();
-            console.log('YTF: Video started playing, tracking time');
-            console.log(`YTF: Current accumulated play time from storage: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
+            // Check for session timeout on play
+            checkSessionTimeout();
+
+            // Always refresh the accumulated time from storage when play starts
+            getStoredValue(STORAGE_KEY_PLAYTIME, 0).then(storedTime => {
+                accumulatedPlayTime = storedTime;
+                lastPlayTimestamp = Date.now();
+                updateLastActiveTime();
+                console.log('YTF: Video started playing, tracking time');
+                console.log(`YTF: Current accumulated play time from storage: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
+            });
         });
     });
 
     videoElement.addEventListener('pause', () => {
-        if (lastPlayTimestamp) {
-            const currentTime = Date.now();
-            const additionalTime = currentTime - lastPlayTimestamp;
-            accumulatedPlayTime += additionalTime;
+        // Only track time if the tracker is enabled and we have a valid timestamp
+        isEnabled().then(enabled => {
+            if (!enabled) {
+                lastPlayTimestamp = null;
+                return;
+            }
 
-            // Always update storage on pause
-            setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
+            if (lastPlayTimestamp) {
+                const currentTime = Date.now();
+                const additionalTime = currentTime - lastPlayTimestamp;
+                accumulatedPlayTime += additionalTime;
 
-            lastPlayTimestamp = null;
-            updateLastActiveTime();
-            console.log(`YTF: Video paused. Accumulated play time: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
-        }
+                // Always update storage on pause
+                setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
+
+                lastPlayTimestamp = null;
+                updateLastActiveTime();
+                console.log(`YTF: Video paused. Accumulated play time: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
+            }
+        });
     });
 
     // When new video loads, don't reset timers, just update the last active time
     videoElement.addEventListener('loadeddata', function() {
         console.log('YTF: New video loaded');
 
-        // Refresh from storage when video loads
-        getStoredValue(STORAGE_KEY_PLAYTIME, 0).then(storedTime => {
-            accumulatedPlayTime = storedTime;
-            console.log(`YTF: Loaded accumulated play time from storage: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
-            updateLastActiveTime();
+        // Check if enabled before updating anything
+        isEnabled().then(enabled => {
+            if (!enabled) {
+                console.log('YTF: New video loaded but feeling tracker is disabled');
+                return;
+            }
+
+            // Refresh from storage when video loads
+            getStoredValue(STORAGE_KEY_PLAYTIME, 0).then(storedTime => {
+                accumulatedPlayTime = storedTime;
+                console.log(`YTF: Loaded accumulated play time from storage: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
+                updateLastActiveTime();
+            });
         });
     });
 
     // Also listen for video end to update stored values
     videoElement.addEventListener('ended', function() {
-        if (lastPlayTimestamp) {
-            const currentTime = Date.now();
-            const additionalTime = currentTime - lastPlayTimestamp;
-            accumulatedPlayTime += additionalTime;
-            setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
-            lastPlayTimestamp = null;
-            updateLastActiveTime();
-            console.log(`YTF: Video ended. Final accumulated play time: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
-        }
+        // Check if enabled before updating anything
+        isEnabled().then(enabled => {
+            if (!enabled) {
+                lastPlayTimestamp = null;
+                return;
+            }
+
+            if (lastPlayTimestamp) {
+                const currentTime = Date.now();
+                const additionalTime = currentTime - lastPlayTimestamp;
+                accumulatedPlayTime += additionalTime;
+                setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
+                lastPlayTimestamp = null;
+                updateLastActiveTime();
+                console.log(`YTF: Video ended. Final accumulated play time: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
+            }
+        });
     });
 }
 
@@ -281,7 +374,12 @@ function initializeFeelingTracker() {
 console.log("YTF: installing listener")
 browser.runtime.onMessage.addListener(data => {
     console.log("YTF: message received", data)
-    const { trigger } = data;
-    if (trigger === 'showFeelingTrackerDialog')
-        showFeelingTrackerDialog();
+    switch (data.trigger) {
+        case "showFeelingTrackerDialog":
+            showFeelingTrackerDialog();
+            break;
+        case "toggleFeelingTracker":
+            toggleEnabled();
+            break;
+    }
 });
