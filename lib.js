@@ -102,3 +102,28 @@ function initPressAndHoldPlugin() {
     };
 }
 initPressAndHoldPlugin();
+
+const Cookies = {
+    get: function(key) {
+        return browser.storage.local.get(key)
+            .then(result => result[key])
+            .catch(error => {
+                console.error(`Overlays: Error getting stored value: ${error}`);
+                return null;
+            });
+    },
+    set: function(key, value) {
+        let data = {};
+        data[key] = value;
+        return browser.storage.local.set(data)
+            .catch(error => {
+                console.error(`Overlays: Error setting stored value: ${error}`);
+            });
+    },
+    remove: function(key) {
+        return browser.storage.local.remove(key)
+            .catch(error => {
+                console.error(`Overlays: Error removing stored value: ${error}`);
+            });
+    }
+};

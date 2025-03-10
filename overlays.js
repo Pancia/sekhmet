@@ -1,50 +1,5 @@
-// Firefox Extension port of overlays.js
-// Ported from Greasemonkey script to WebExtension format
-
-// Global settings
 const __overlays_time = 3000;
-const __max_items_shown = 5; // Maximum number of comments or related videos to show
 
-// Cookie-like storage helper using browser.storage.local
-const Cookies = {
-    get: function(key) {
-        return browser.storage.local.get(key)
-            .then(result => result[key])
-            .catch(error => {
-                console.error(`Overlays: Error getting stored value: ${error}`);
-                return null;
-            });
-    },
-    set: function(key, value) {
-        let data = {};
-        data[key] = value;
-        return browser.storage.local.set(data)
-            .catch(error => {
-                console.error(`Overlays: Error setting stored value: ${error}`);
-            });
-    },
-    remove: function(key) {
-        return browser.storage.local.remove(key)
-            .catch(error => {
-                console.error(`Overlays: Error removing stored value: ${error}`);
-            });
-    }
-};
-
-// Check if overlays are enabled for the user
-async function isEnabledForUser() {
-    const now = Date.now();
-    const isEnabled = await Cookies.get("overlays:isDisabled") != "true";
-    const disabledUntil = await Cookies.get("overlays:disabledUntil") || 0;
-
-    if (now > disabledUntil) {
-        Cookies.remove("overlays:disabledUntil");
-    }
-
-    return isEnabled && now > disabledUntil;
-}
-
-// Add a global CSS style
 function addGlobalStyle(css) {
     const head = document.getElementsByTagName('head')[0];
     if (!head) { return; }
@@ -55,84 +10,10 @@ function addGlobalStyle(css) {
     head.appendChild(style);
 }
 
-// Add overlay to an element
-function addOverlay(selector, text, holdTime, callback) {
-    const targetElement = document.querySelector(selector);
-    if (!targetElement) return null;
-
-    const overlay = document.createElement('div');
-    overlay.id = selector.replace(/[^a-zA-Z0-9]/g, '_');
-    overlay.style.width = targetElement.offsetWidth + 'px';
-    overlay.style.opacity = '1';
-    overlay.style.position = 'absolute';
-    overlay.style.backgroundColor = 'black';
-    overlay.style.height = '100%';
-    overlay.style.zIndex = '2200';
-
-    const button = document.createElement('button');
-    button.textContent = text || `Show: ${selector}`;
-    button.style.height = '100px';
-    button.style.width = '100%';
-    button.style.fontSize = '22px';
-    button.style.backgroundColor = 'white';
-
-    button.pressAndHold({ holdTime: holdTime || 5000 });
-    button.addEventListener('complete.pressAndHold', () => {
-        const overlayElements = document.querySelectorAll(`[id='${overlay.id}']`);
-        overlayElements.forEach(el => el.remove());
-        if (typeof callback === 'function') {
-            setTimeout(callback, 0);
-        }
-    });
-
-    overlay.appendChild(button);
-    targetElement.prepend(overlay);
-
-    return overlay;
-}
-
-// Add overlay to an element with a custom button
-function addOverlayTo(elementSelector, overlayID, buttonConfig, opts) {
-    const element = document.querySelector(elementSelector);
-    if (!element) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = overlayID;
-    overlay.style.width = element.offsetWidth + 'px';
-    overlay.style.opacity = '1';
-    overlay.style.position = 'absolute';
-    overlay.style.backgroundColor = 'black';
-    overlay.style.height = '100%';
-    overlay.style.zIndex = '2200';
-
-    const button = document.createElement('button');
-    if (buttonConfig.html) {
-        button.innerHTML = buttonConfig.html;
-    } else if (buttonConfig.text) {
-        button.textContent = buttonConfig.text;
-    }
-
-    if (buttonConfig.styles) {
-        Object.assign(button.style, buttonConfig.styles);
-    }
-
-    button.pressAndHold(opts);
-    button.addEventListener('complete.pressAndHold', () => {
-        try { element.setAttribute("data-overlay", "disabled"); } catch(e) {}
-        const overlayElements = document.querySelectorAll(`[id='${overlayID}']`);
-        overlayElements.forEach(el => el.remove());
-    });
-
-    overlay.appendChild(button);
-    element.prepend(overlay);
-}
-
-// Format time for display
 function displayTime(date) {
     return new Date(Number(date)).toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric", hourCycle: "h24"});
 }
 
-// Function to add individual overlays to each item
 function addIndividualOverlays(containerSelector, itemSelector, itemName) {
     console.log(`Adding individual overlays to ${itemName}`);
 
@@ -149,6 +30,14 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
         console.log(`No ${itemName} found`);
         return;
     }
+
+    console.log("The blur is causing issues with overlays - making items visible for overlay placement");
+    // Temporarily remove blur class to add overlays
+    addGlobalStyle(`
+        ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer {
+            filter: none !important;
+        }
+    `);
 
     console.log(`Found ${allItems.length} ${itemName} to overlay`);
 
@@ -232,12 +121,17 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                         if (adjacentOverlay) {
                             adjacentOverlay.remove();
                         }
+                        // Remove blur by adding revealed class
+                        adjacentItem.classList.add('revealed');
                     }
                 }
             };
 
             // removeAdjacentOverlays(currentIndex, -1, 2); // Remove above
             removeAdjacentOverlays(currentIndex, 1, 2);  // Remove below
+
+            // Remove blur from current item
+            item.classList.add('revealed');
 
             console.log(`Revealed ${itemName} item at index ${currentIndex} and adjacent items`);
         });
@@ -256,6 +150,19 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
     });
 
     console.log(`Added overlays to ${allItems.length} ${itemName}`);
+
+    // Re-apply blur to items without overlays
+    setTimeout(() => {
+        addGlobalStyle(`
+            ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer {
+                filter: blur(5px);
+            }
+            ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer.revealed {
+                filter: none;
+            }
+        `);
+        console.log("Re-applied blur to items");
+    }, 500);
 
     // Set up a mutation observer to handle newly added items
     const observer = new MutationObserver((mutations) => {
@@ -280,6 +187,13 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                 // Find items without overlays
                 const newItems = Array.from(container.querySelectorAll(itemSelector))
                     .filter(item => !item.querySelector('.individual-item-overlay'));
+
+                // Temporarily remove blur for overlay placement
+                addGlobalStyle(`
+                    ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer {
+                        filter: none !important;
+                    }
+                `);
 
                 newItems.forEach((item, index) => {
                     // Create item ID
@@ -355,6 +269,8 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                                     if (adjacentOverlay) {
                                         adjacentOverlay.remove();
                                     }
+                                    // Remove blur by adding revealed class
+                                    adjacentItem.classList.add('revealed');
                                 }
                             }
                         };
@@ -362,6 +278,9 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                         // Remove 2 overlays above and 2 below
                         removeAdjacentOverlays(currentIndex, -1, 2); // Remove above
                         removeAdjacentOverlays(currentIndex, 1, 2);  // Remove below
+
+                        // Remove blur from current item
+                        item.classList.add('revealed');
 
                         console.log(`Revealed ${itemName} item at index ${currentIndex} and adjacent items`);
                     });
@@ -380,6 +299,18 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
                 });
 
                 console.log(`Added overlays to ${newItems.length} new ${itemName}`);
+
+                // Re-apply blur to items without overlays
+                setTimeout(() => {
+                    addGlobalStyle(`
+                        ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer {
+                            filter: blur(5px);
+                        }
+                        ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer.revealed {
+                            filter: none;
+                        }
+                    `);
+                }, 200);
             }, 100);
         }
     });
@@ -393,56 +324,64 @@ function addIndividualOverlays(containerSelector, itemSelector, itemName) {
     return observer;
 }
 
-// Main function to initialize overlays
+function debounce(wait, func) {
+    let timeout;
+    return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            func.apply(context, args);
+        }, wait);
+    };
+}
+
+var __once = false;
+
+var onMutationsFinished = debounce(100, function() {
+    if (__once == false) {
+        __once = true;
+    } else {
+        return
+    }
+    if (window.location.pathname === "/watch") {
+        waitForElementToBeLoaded("#comments #comment", () => {
+            addIndividualOverlays("#comments", "ytd-comment-thread-renderer", "comments");
+        });
+
+        // Try different selectors to make sure we find the videos
+        waitForElementToBeLoaded("ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer", () => {
+            console.log("Found related videos, adding overlays");
+            addIndividualOverlays("ytd-watch-next-secondary-results-renderer", "ytd-compact-video-renderer", "videos");
+        });
+    }
+})
+
 async function initializeOverlays() {
-    // Only run on YouTube
     if (window.location.hostname !== "www.youtube.com") {
         return;
     }
 
-    // Check if we should run first-time setup
-    const overlaysDisabled = await Cookies.get("overlays:isDisabled");
-    if (overlaysDisabled === null) {
-        // This would normally be a confirm dialog, but that could be annoying in an extension
-        // So we'll default to not disabled
-        Cookies.set("overlays:isDisabled", false);
-    }
+    console.log("Initializing YouTube overlays");
 
-    // Handle watch pages
-    if (window.location.pathname === "/watch") {
-        // Original section overlays
-        waitForElementToBeLoaded("#comments #comment", () => {
-            addOverlay("#comments", "STOP! is it really worth it?", __overlays_time, () => {
-                // After main overlay is removed, add individual overlays to each comment
-                addIndividualOverlays("#comments", "ytd-comment-thread-renderer", "comments");
-            });
-        });
-
-        waitForElementToBeLoaded("#related #items", () => {
-            addOverlay("#related", "related videos", __overlays_time, () => {
-                // After main overlay is removed, add individual overlays to each related video
-                addIndividualOverlays("#related #items", "ytd-compact-video-renderer", "videos");
-            });
-        });
-    }
-
-    // Set up home page grid overlays observer
-    if (window.location.pathname === "/") {
-        // Debounce function implementation
-        function debounce(func, wait) {
-            let timeout;
-            return function() {
-                const context = this;
-                const args = arguments;
-                clearTimeout(timeout);
-                timeout = setTimeout(() => {
-                    func.apply(context, args);
-                }, wait);
-            };
+    // Add blur effect on related videos as soon as possible
+    addGlobalStyle(`
+        ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer {
+            filter: blur(5px);
+            transition: filter 0.3s ease;
         }
+        ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer.revealed {
+            filter: none;
+        }
+        /* Make sure overlay is visible on top of blur */
+        .individual-item-overlay {
+            z-index: 10000 !important;
+            pointer-events: auto !important;
+        }
+    `);
 
-        // Set up the mutation observer
-        const observer = new MutationObserver(onMutationsFinished);
-        observer.observe(document, {subtree: true, childList: true});
-    }
+    console.log("Added blur style to related videos");
+
+    const observer = new MutationObserver(onMutationsFinished);
+    observer.observe(document, {subtree: true, childList: true});
 }
