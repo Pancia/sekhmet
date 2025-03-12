@@ -1,3 +1,14 @@
+function initLogger(module) {
+    const prefix = `[YT+] [${module}]:`
+    function log(...args) {
+        console.log(prefix, ...args)
+    }
+    function error(...args) {
+        console.error(prefix, ...args)
+    }
+    return { log, error }
+}
+
 function waitForElementToBeLoaded(selector, callback) {
     const tid = setInterval(function() {
         // wait for x element to have been loaded, ie: not null & has width
@@ -7,6 +18,20 @@ function waitForElementToBeLoaded(selector, callback) {
         clearInterval(tid);
         callback(x);
     }, 100);
+}
+
+function saveFile(filename, data) {
+    const file = new Blob([data], {type: "text/plain"});
+    const a = document.createElement("a");
+    const url = URL.createObjectURL(file);
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }, 0);
 }
 
 function initPressAndHoldPlugin() {

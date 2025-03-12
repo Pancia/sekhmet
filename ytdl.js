@@ -1,17 +1,4 @@
 function YTDL(downloadType) {
-    function saveFile(filename, data) {
-        const file = new Blob([data], {type: "text/plain"});
-        const a = document.createElement("a");
-        const url = URL.createObjectURL(file);
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function() {
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }, 0);
-    }
     const qp = new URLSearchParams(window.location.search);
     const fileName = (qp.get("list") && !qp.get("v")) ? qp.get("list")+".playlist" : qp.get("v")+".single";
     saveFile(fileName+`.${downloadType}.ytdl`, "ytdl gen, please ignore");
