@@ -9,19 +9,6 @@ function initializeYTDL() {
         return;
     }
 
-    // Add watch later link to mini guide
-    waitForElementToBeLoaded("ytd-mini-guide-renderer > #items", () => {
-        const items = document.querySelector("ytd-mini-guide-renderer > #items");
-        const watchLaterLink = document.createElement("a");
-        watchLaterLink.id = "endpoint";
-        watchLaterLink.tabIndex = "-1";
-        watchLaterLink.className = "yt-simple-endpoint style-scope ytd-mini-guide-entry-renderer";
-        watchLaterLink.title = "Library";
-        watchLaterLink.href = "/playlist?list=WL";
-        watchLaterLink.innerHTML = '<span style="font-size:24px">🕓</span><span class="title style-scope ytd-mini-guide-entry-renderer">Watch Later</span>';
-        items.insertAdjacentElement('afterend', watchLaterLink);
-    });
-
     // Add a single download button near avatar that opens a dialog with download options
     waitForElementToBeLoaded("#center.ytd-masthead", () => {
         waitForElementToBeLoaded("#avatar-btn", () => {
