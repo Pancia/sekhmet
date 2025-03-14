@@ -1,5 +1,5 @@
 let initializeFeelingTracker = (function() {
-    const {log, error} = initLogger("YTFT")
+    const {log, debug, error} = initLogger("YTFT")
 
     const CHECK_INTERVAL_MINUTES = 5;
     const SESSION_TIMEOUT_MINUTES = 5;
@@ -35,7 +35,7 @@ let initializeFeelingTracker = (function() {
         return browser.storage.local.get(getStorageKey(STORAGE_KEY_ENABLED))
             .then(result => {
                 const enabled = result[getStorageKey(STORAGE_KEY_ENABLED)] !== false;
-                log(`Feeling tracker is ${enabled ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
+                debug(`Feeling tracker is ${enabled ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
                 return enabled;
             })
             .catch(error => {
@@ -142,19 +142,19 @@ let initializeFeelingTracker = (function() {
 
             document.body.appendChild(dialog);
 
-            let holdTime = 2500;
+            let holdTime = 5000;
             let better = document.getElementById('feeling-better');
-            better.pressAndHold({ holdTime });
+            better.pressAndHold({ holdTime, isClickDisabled: true });
             better.addEventListener('complete.pressAndHold', () => {
                 trackFeeling('better');
             });
             let neutral = document.getElementById('feeling-neutral');
-            neutral.pressAndHold({ holdTime });
+            neutral.pressAndHold({ holdTime, isClickDisabled: true });
             neutral.addEventListener('complete.pressAndHold', () => {
                 trackFeeling('neutral');
             });
             let worse = document.getElementById('feeling-worse');
-            worse.pressAndHold({ holdTime });
+            worse.pressAndHold({ holdTime, isClickDisabled: true });
             worse.addEventListener('complete.pressAndHold', () => {
                 trackFeeling('worse');
             });
@@ -165,13 +165,26 @@ let initializeFeelingTracker = (function() {
 
     async function trackFeeling(feeling) {
         log(`User is feeling ${feeling} after ${Math.round(accumulatedPlayTime / 1000)} seconds of YouTube viewing`);
-        let timestamp = new Date().toISOString();
-        saveFile(`feeling-tracker.${timestamp}.txt`, JSON.stringify({
-            feeling: feeling
-        }));
+        let timestamp = new Intl.DateTimeFormat(undefined, {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+        }).format(new Date())
+            .replace(',', '')
+            .replace(' ', '_')
+            .replace(/[^0-9_-]/g, '-')
 
         let watchedVideos = await getStoredValue("watchedVideos")
         log("watchedVideos", watchedVideos)
+
+        saveFile(`feeling-tracker.${timestamp}.txt`, JSON.stringify({
+            feeling, watchedVideos
+        }));
+
         setStoredValue("watchedVideos", [])
 
         const dialog = document.getElementById('feeling-dialog');
@@ -246,6 +259,9 @@ let initializeFeelingTracker = (function() {
 
                 getStoredValue("watchedVideos", []).then(watchedVideos => {
                     watchedVideos.push({ title: document.title, url: window.location.href })
+                    watchedVideos = watchedVideos.filter((obj1, i, arr) =>
+                        arr.findIndex(obj2 => (obj2.url === obj1.url)) === i
+                    )
                     setStoredValue("watchedVideos", watchedVideos)
                     log("new watchedVideos", watchedVideos)
                 })

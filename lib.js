@@ -3,17 +3,20 @@ function initLogger(module) {
     function log(...args) {
         console.log(prefix, ...args)
     }
+    function debug(...args) {
+        console.debug(prefix, ...args)
+    }
     function error(...args) {
         console.error(prefix, ...args)
     }
-    return { log, error }
+    return { log, debug, error }
 }
 
 function waitForElementToBeLoaded(selector, callback) {
     const tid = setInterval(function() {
-        // wait for x element to have been loaded, ie: not null & has width
         const x = document.querySelector(selector);
-        if (x == null || x.offsetWidth <= 0) { return; }
+        // wait for x element to have been loaded, ie: not null & has width
+        if (x == null || x.offsetWidth <= 0 || x.offsetHeight <= 0) { return; }
         // x was loaded, go ahead!
         clearInterval(tid);
         callback(x);
@@ -72,7 +75,9 @@ function initPressAndHoldPlugin() {
             this.element.addEventListener('mousedown', function(e) {
                 if (e.button == 2) { return; }
                 if (isActive) {
-                    decaCounter += 100;
+                    if (_this.settings.isClickDisabled !== true) {
+                        decaCounter += 100;
+                    }
                 } else {
                     // Trigger start event
                     const startEvent = new CustomEvent('start.pressAndHold');

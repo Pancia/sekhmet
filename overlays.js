@@ -17,7 +17,11 @@ let initializeOverlays = (function() {
         return new Date(Number(date)).toLocaleTimeString("en-US", { hour: "numeric", minute: "numeric", hourCycle: "h24"});
     }
 
-    function addIndividualOverlays(containerSelector, itemSelector, itemName) {
+    function closeTo(x, number, margin) {
+        return x >= (number - margin) && x <= (number + margin)
+    }
+
+    function addIndividualOverlays(containerSelector, itemSelector, itemName, filterFunction) {
         log(`Adding individual overlays to ${itemName}`);
 
         const container = document.querySelector(containerSelector);
@@ -27,7 +31,10 @@ let initializeOverlays = (function() {
         }
         log('container is', container);
 
-        const allItems = Array.from(container.querySelectorAll(itemSelector));
+        let allItems = Array.from(container.querySelectorAll(itemSelector))
+        if (filterFunction) {
+            allItems = allItems.filter(filterFunction);
+        }
         if (allItems.length === 0) {
             log(`No ${itemName} found`);
             return;
@@ -184,8 +191,11 @@ let initializeOverlays = (function() {
                 log(`New ${itemName} detected, adding overlays`);
                 setTimeout(() => {
                     // Find items without overlays
-                    const newItems = Array.from(container.querySelectorAll(itemSelector))
-                        .filter(item => !item.querySelector('.individual-item-overlay'));
+                    let newItems = Array.from(container.querySelectorAll(itemSelector))
+                        .filter(item => !item.querySelector('.individual-item-overlay'))
+                    if (filterFunction) {
+                        newItems = newItems.filter(filterFunction);
+                    }
 
                     // Temporarily remove blur for overlay placement
                     addGlobalStyle(`
@@ -345,15 +355,16 @@ let initializeOverlays = (function() {
         }
         if (window.location.pathname === "/watch") {
             waitForElementToBeLoaded("#comments #comment", () => {
-                addIndividualOverlays("#comments", "ytd-comment-thread-renderer", "comments");
+                addIndividualOverlays("#comments", "#comment", "comments");
             });
 
             waitForElementToBeLoaded("ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer", () => {
                 log("Found related videos, adding overlays");
                 addIndividualOverlays(
-                    "ytd-watch-next-secondary-results-renderer #contents",
-                    ".ytd-item-section-renderer",
-                    "videos");
+                    "ytd-watch-next-secondary-results-renderer #contents,ytd-watch-next-secondary-results-renderer #items",
+                    ".ytd-item-section-renderer,.ytd-watch-next-secondary-results-renderer",
+                    "videos",
+                (i) => closeTo(i.offsetHeight, document.querySelector("a#thumbnail").offsetHeight, 10));
             });
         }
     })
