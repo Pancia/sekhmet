@@ -12,11 +12,18 @@ function initLogger(module) {
     return { log, debug, error }
 }
 
-function waitForElementToBeLoaded(selector, callback) {
+var __iter = 0;
+function waitForElementToBeLoaded(selector, callback, elementTest) {
+    function out(elem) {
+        if ((__iter++ % 5) == 0) {
+            console.debug("[lib/wait]:", selector, elem, (elementTest && elementTest(elem) || "nil"))
+        }
+    }
     const tid = setInterval(function() {
         const x = document.querySelector(selector);
         // wait for x element to have been loaded, ie: not null & has width
-        if (x == null || x.offsetWidth <= 0 || x.offsetHeight <= 0) { return; }
+        if (x == null || x.offsetWidth <= 0 || x.offsetHeight <= 0) { out(x); return }
+        if (elementTest && !elementTest(x)) { out(x); return }
         // x was loaded, go ahead!
         clearInterval(tid);
         callback(x);

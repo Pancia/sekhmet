@@ -354,17 +354,21 @@ let initializeOverlays = (function() {
             return
         }
         if (window.location.pathname === "/watch") {
-            waitForElementToBeLoaded("#comments #comment", () => {
+            waitForElementToBeLoaded("#comments", () => {
                 addIndividualOverlays("#comments", "#comment", "comments");
+            }, (element) => {
+                return element.offsetHeight > 333
             });
 
-            waitForElementToBeLoaded("ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer", () => {
+            waitForElementToBeLoaded("ytd-watch-next-secondary-results-renderer", () => {
                 log("Found related videos, adding overlays");
                 addIndividualOverlays(
                     "ytd-watch-next-secondary-results-renderer #contents,ytd-watch-next-secondary-results-renderer #items",
                     ".ytd-item-section-renderer,.ytd-watch-next-secondary-results-renderer",
                     "videos",
-                (i) => closeTo(i.offsetHeight, document.querySelector("a#thumbnail").offsetHeight, 10));
+                    (i) => closeTo(i.offsetHeight, document.querySelector("ytd-watch-next-secondary-results-renderer a#thumbnail").offsetHeight, 10));
+            }, (element) => {
+                return element.offsetHeight > 333
             });
         }
     })

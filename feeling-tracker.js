@@ -1,7 +1,7 @@
 let initializeFeelingTracker = (function() {
     const {log, debug, error} = initLogger("YTFT")
 
-    const CHECK_INTERVAL_MINUTES = 5;
+    const CHECK_INTERVAL_MINUTES = 7.5;
     const SESSION_TIMEOUT_MINUTES = 5;
     const STORAGE_KEY_PLAYTIME = 'ytf_accumulatedPlayTime';
     const STORAGE_KEY_LASTACTIVE = 'ytf_lastActiveTime';
@@ -110,27 +110,29 @@ let initializeFeelingTracker = (function() {
         setStoredValue(STORAGE_KEY_LASTACTIVE, currentTime);
     }
 
-    function showFeelingTrackerDialog() {
+    async function showFeelingTrackerDialog() {
         if (videoElement && !videoElement.paused) {
             videoElement.pause();
         }
 
-        if (!document.getElementById('feeling-dialog')) {
-            const dialog = document.createElement('div');
-            dialog.id = 'feeling-dialog';
-            dialog.style.position = 'fixed';
-            dialog.style.top = '50%';
-            dialog.style.left = '50%';
-            dialog.style.transform = 'translate(-50%, -50%)';
-            dialog.style.backgroundColor = 'white';
-            dialog.style.padding = '20px';
-            dialog.style.borderRadius = '8px';
-            dialog.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
-            dialog.style.zIndex = '9999';
-            dialog.style.width = '300px';
-            dialog.style.textAlign = 'center';
+        let d = document.getElementById('feeling-dialog')
+        if (d) { return }
 
-            dialog.innerHTML = `
+        const dialog = document.createElement('div');
+        dialog.id = 'feeling-dialog';
+        dialog.style.position = 'fixed';
+        dialog.style.top = '50%';
+        dialog.style.left = '50%';
+        dialog.style.transform = 'translate(-50%, -50%)';
+        dialog.style.backgroundColor = 'white';
+        dialog.style.padding = '20px';
+        dialog.style.borderRadius = '8px';
+        dialog.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+        dialog.style.zIndex = '9999';
+        dialog.style.width = '300px';
+        dialog.style.textAlign = 'center';
+
+        dialog.innerHTML = `
       <h2 style="margin-top: 0; color: #333;">How are you feeling?</h2>
       <p style="color: #666;">Check in with yourself after watching for a while.</p>
       <div style="display: flex; justify-content: space-between; margin-top: 20px;">
@@ -140,27 +142,25 @@ let initializeFeelingTracker = (function() {
       </div>
     `;
 
-            document.body.appendChild(dialog);
+        document.body.appendChild(dialog);
 
-            let holdTime = 5000;
-            let better = document.getElementById('feeling-better');
-            better.pressAndHold({ holdTime, isClickDisabled: true });
-            better.addEventListener('complete.pressAndHold', () => {
-                trackFeeling('better');
-            });
-            let neutral = document.getElementById('feeling-neutral');
-            neutral.pressAndHold({ holdTime, isClickDisabled: true });
-            neutral.addEventListener('complete.pressAndHold', () => {
-                trackFeeling('neutral');
-            });
-            let worse = document.getElementById('feeling-worse');
-            worse.pressAndHold({ holdTime, isClickDisabled: true });
-            worse.addEventListener('complete.pressAndHold', () => {
-                trackFeeling('worse');
-            });
-        } else {
-            document.getElementById('feeling-dialog').style.display = 'block';
-        }
+        let holdTime = 10000;
+
+        let better = document.getElementById('feeling-better');
+        better.pressAndHold({ holdTime, isClickDisabled: true });
+        better.addEventListener('complete.pressAndHold', () => {
+            trackFeeling('better');
+        });
+        let neutral = document.getElementById('feeling-neutral');
+        neutral.pressAndHold({ holdTime, isClickDisabled: true });
+        neutral.addEventListener('complete.pressAndHold', () => {
+            trackFeeling('neutral');
+        });
+        let worse = document.getElementById('feeling-worse');
+        worse.pressAndHold({ holdTime, isClickDisabled: true });
+        worse.addEventListener('complete.pressAndHold', () => {
+            trackFeeling('worse');
+        });
     }
 
     async function trackFeeling(feeling) {
@@ -181,16 +181,14 @@ let initializeFeelingTracker = (function() {
         let watchedVideos = await getStoredValue("watchedVideos")
         log("watchedVideos", watchedVideos)
 
-        saveFile(`feeling-tracker.${timestamp}.txt`, JSON.stringify({
+        /*saveFile(`feeling-tracker.${timestamp}.txt`, JSON.stringify({
             feeling, watchedVideos
-        }));
+        }));*/
 
         setStoredValue("watchedVideos", [])
 
         const dialog = document.getElementById('feeling-dialog');
-        if (dialog) {
-            dialog.style.display = 'none';
-        }
+        if (dialog) { dialog.remove(); }
         accumulatedPlayTime = 0;
         setStoredValue(STORAGE_KEY_PLAYTIME, 0);
         updateLastActiveTime();
