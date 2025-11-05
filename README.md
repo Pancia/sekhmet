@@ -1,10 +1,27 @@
-# YouTube Tools Firefox Extension
+# YouTube Tools Browser Extension
 
-This Firefox extension combines the functionality of three Greasemonkey scripts:
+This browser extension works on Firefox, Brave, Chrome, and other Chromium-based browsers. It combines the functionality of three Greasemonkey scripts:
 
 1. **Video Downloader**: Adds download buttons for YouTube videos in different formats
 2. **Feeling Tracker**: Tracks YouTube watch time and periodically asks the user how they're feeling
 3. **Content Overlays**: Creates overlays that hide YouTube content until users intentionally interact with them
+
+## Installation
+
+### Firefox
+1. Open Firefox and navigate to `about:debugging`
+2. Click "This Firefox" in the sidebar
+3. Click "Load Temporary Add-on"
+4. Navigate to the extension directory and select `manifest.json`
+
+### Brave / Chrome / Edge
+1. Open your browser and navigate to the extensions page:
+   - Brave: `brave://extensions`
+   - Chrome: `chrome://extensions`
+   - Edge: `edge://extensions`
+2. Enable "Developer mode" (toggle in top-right corner)
+3. Click "Load unpacked"
+4. Select the extension directory
 
 ## Implementation Details
 
@@ -21,17 +38,23 @@ This Firefox extension combines the functionality of three Greasemonkey scripts:
 ### Technical Changes
 
 - Replaced jQuery with native JavaScript where possible
-- Converted localStorage usage to Firefox's WebExtension `browser.storage.local` API
+- Converted localStorage usage to WebExtension `browser.storage.local` API
+- Added [Mozilla's webextension-polyfill](https://github.com/mozilla/webextension-polyfill) for cross-browser compatibility (Firefox/Chromium)
 - Created a custom Cookies interface for browser storage
 - Implemented the pressAndHold plugin natively
 - Added proper async/await support for browser API calls
 
 ### Current Structure
 
+- `polyfill.js`: Cross-browser API compatibility layer (Mozilla's webextension-polyfill)
+- `lib.js`: Shared utilities and helpers
 - `ytdl.js`: Video download functionality
 - `feeling-tracker.js`: YouTube watch time tracking and mood prompts
 - `overlays.js`: Content overlay functionality
+- `youtube.js`: YouTube-specific functionality
+- `google-it.js`: DuckDuckGo integration
 - `index.js`: Main coordinator script
+- `background.js`: Background script for context menus and messaging
 - `manifest.json`: Extension configuration
 
 ## Potential Next Steps

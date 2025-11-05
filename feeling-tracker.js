@@ -23,8 +23,8 @@ let initializeFeelingTracker = (function() {
             currentTabId = response.tabId;
             log(`Got current tab ID: ${currentTabId}`);
         })
-        .catch(error => {
-            error(`Error getting tab ID: ${error}`);
+        .catch(err => {
+            error(`Error getting tab ID: ${err}`);
         });
 
     function getStorageKey(baseKey) {
@@ -38,8 +38,8 @@ let initializeFeelingTracker = (function() {
                 debug(`Feeling tracker is ${enabled ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
                 return enabled;
             })
-            .catch(error => {
-                error(`Error checking if enabled: ${error}`);
+            .catch(err => {
+                error(`Error checking if enabled: ${err}`);
                 return true; // Default to enabled if there's an error
             });
     }
@@ -55,8 +55,8 @@ let initializeFeelingTracker = (function() {
                     log(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
                     alert(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'}`);
                 })
-                .catch(error => {
-                    error(`Error toggling enabled state: ${error}`);
+                .catch(err => {
+                    error(`Error toggling enabled state: ${err}`);
                 });
         });
     }
@@ -69,8 +69,8 @@ let initializeFeelingTracker = (function() {
             .then(result => {
                 return result[storageKey] !== undefined ? JSON.parse(result[storageKey]) : defaultValue;
             })
-            .catch(error => {
-                error(`Error getting stored value: ${error}`);
+            .catch(err => {
+                error(`Error getting stored value: ${err}`);
                 return defaultValue;
             });
     }
@@ -83,8 +83,8 @@ let initializeFeelingTracker = (function() {
         let data = {};
         data[storageKey] = JSON.stringify(value);
         return browser.storage.local.set(data)
-            .catch(error => {
-                error(`Error setting stored value: ${error}`);
+            .catch(err => {
+                error(`Error setting stored value: ${err}`);
             });
     }
 

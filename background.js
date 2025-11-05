@@ -6,8 +6,8 @@ function onCreated() {
     }
 }
 
-console.log("YTF: create menu", browser.menus)
-browser.menus.create({
+console.log("YTF: create menu", browser.contextMenus)
+browser.contextMenus.create({
     id: "feeling-tracker",
     title: "DEBUG: feeling tracker",
     contexts: ["all"],
@@ -31,7 +31,7 @@ async function toggleFeelingTracker() {
     browser.tabs.sendMessage(tabId, { trigger: 'toggleFeelingTracker' });
 }
 
-browser.menus.onClicked.addListener((info, tab) => {
+browser.contextMenus.onClicked.addListener((info, tab) => {
     console.log("YTF: menu listener")
     switch (info.menuItemId) {
         case "feeling-tracker":
@@ -43,7 +43,7 @@ browser.menus.onClicked.addListener((info, tab) => {
     }
 });
 
-browser.menus.create({
+browser.contextMenus.create({
     id: "ytf-is-enabled",
     title: "Toggle Feeling Tracker",
     contexts: ["all"],

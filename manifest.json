@@ -9,17 +9,17 @@
         }
     },
     "background": {
-        "scripts": ["background.js"]
+        "scripts": ["polyfill.js", "background.js"]
     },
-    "permissions": ["storage", "tabs", "menus", "contextMenus"],
+    "permissions": ["storage", "tabs", "contextMenus"],
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],
-            "js": ["lib.js", "ytdl.js", "overlays.js", "feeling-tracker.js", "youtube.js", "index.js"]
+            "js": ["polyfill.js", "lib.js", "ytdl.js", "overlays.js", "feeling-tracker.js", "youtube.js", "index.js"]
         },
         {
             "matches": ["*://*.duckduckgo.com/*"],
-            "js": ["lib.js", "google-it.js"]
+            "js": ["polyfill.js", "lib.js", "google-it.js"]
         }
     ]
 }
