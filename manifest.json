@@ -15,11 +15,13 @@
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],
-            "js": ["polyfill.js", "lib.js", "ytdl.js", "overlays.js", "feeling-tracker.js", "youtube.js", "index.js"]
+            "js": ["polyfill.js", "lib.js", "ytdl.js", "overlays.js", "feeling-tracker.js", "youtube.js", "index.js"],
+            "all_frames": false
         },
         {
             "matches": ["*://*.duckduckgo.com/*"],
-            "js": ["polyfill.js", "lib.js", "google-it.js"]
+            "js": ["polyfill.js", "lib.js", "google-it.js"],
+            "all_frames": false
         }
     ]
 }

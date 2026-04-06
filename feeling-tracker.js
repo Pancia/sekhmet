@@ -1,6 +1,46 @@
 let initializeFeelingTracker = (function() {
     const {log, debug, error} = initLogger("YTFT")
 
+    // Helper to check if extension context is still valid
+    function isExtensionContextValid() {
+        try {
+            return !!(browser && browser.runtime && browser.runtime.id);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // Safe wrapper for storage.get that checks context validity
+    function safeStorageGet(key) {
+        if (!isExtensionContextValid()) {
+            debug('Extension context invalidated, cannot access storage');
+            return Promise.resolve({});
+        }
+        return browser.storage.local.get(key).catch(err => {
+            if (err.message && err.message.includes('Extension context invalidated')) {
+                debug('Extension context invalidated during storage.get');
+            } else {
+                error(`Error accessing storage: ${err}`);
+            }
+            return {};
+        });
+    }
+
+    // Safe wrapper for storage.set that checks context validity
+    function safeStorageSet(data) {
+        if (!isExtensionContextValid()) {
+            debug('Extension context invalidated, cannot write to storage');
+            return Promise.resolve();
+        }
+        return browser.storage.local.set(data).catch(err => {
+            if (err.message && err.message.includes('Extension context invalidated')) {
+                debug('Extension context invalidated during storage.set');
+            } else {
+                error(`Error writing to storage: ${err}`);
+            }
+        });
+    }
+
     const CHECK_INTERVAL_MINUTES = 7.5;
     const SESSION_TIMEOUT_MINUTES = 5;
     const STORAGE_KEY_PLAYTIME = 'ytf_accumulatedPlayTime';
@@ -18,21 +58,29 @@ let initializeFeelingTracker = (function() {
     let currentTabId = null;
 
     // Get the current tab ID on initialization
-    browser.runtime.sendMessage({ action: "getTabId" })
-        .then(response => {
-            currentTabId = response.tabId;
-            log(`Got current tab ID: ${currentTabId}`);
-        })
-        .catch(err => {
-            error(`Error getting tab ID: ${err}`);
-        });
+    if (isExtensionContextValid()) {
+        browser.runtime.sendMessage({ action: "getTabId" })
+            .then(response => {
+                currentTabId = response.tabId;
+                log(`Got current tab ID: ${currentTabId}`);
+            })
+            .catch(err => {
+                if (err.message && err.message.includes('Extension context invalidated')) {
+                    debug('Extension context invalidated during tab ID request');
+                } else {
+                    error(`Error getting tab ID: ${err}`);
+                }
+            });
+    } else {
+        debug('Extension context invalid, cannot get tab ID');
+    }
 
     function getStorageKey(baseKey) {
         return currentTabId ? `${baseKey}_${currentTabId}` : baseKey;
     }
 
     function isEnabled() {
-        return browser.storage.local.get(getStorageKey(STORAGE_KEY_ENABLED))
+        return safeStorageGet(getStorageKey(STORAGE_KEY_ENABLED))
             .then(result => {
                 const enabled = result[getStorageKey(STORAGE_KEY_ENABLED)] !== false;
                 debug(`Feeling tracker is ${enabled ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
@@ -50,7 +98,7 @@ let initializeFeelingTracker = (function() {
             const data = {};
             data[getStorageKey(STORAGE_KEY_ENABLED)] = newState;
 
-            return browser.storage.local.set(data)
+            return safeStorageSet(data)
                 .then(() => {
                     log(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
                     alert(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'}`);
@@ -65,7 +113,7 @@ let initializeFeelingTracker = (function() {
         // Only use tab-specific key for the enabled setting, others are global
         const storageKey = key === STORAGE_KEY_ENABLED ? getStorageKey(key) : key;
 
-        return browser.storage.local.get(storageKey)
+        return safeStorageGet(storageKey)
             .then(result => {
                 return result[storageKey] !== undefined ? JSON.parse(result[storageKey]) : defaultValue;
             })
@@ -82,7 +130,7 @@ let initializeFeelingTracker = (function() {
 
         let data = {};
         data[storageKey] = JSON.stringify(value);
-        return browser.storage.local.set(data)
+        return safeStorageSet(data)
             .catch(err => {
                 error(`Error setting stored value: ${err}`);
             });
@@ -342,6 +390,12 @@ let initializeFeelingTracker = (function() {
 
     // Function to initialize the feeling tracker
     function initializeFeelingTracker() {
+        // Check if extension context is valid
+        if (!isExtensionContextValid()) {
+            debug('Extension context invalid, cannot initialize feeling tracker');
+            return;
+        }
+
         // Only run on YouTube watch pages
         if (window.location.hostname !== "www.youtube.com" || !window.location.pathname.includes("/watch")) {
             return;
@@ -398,17 +452,21 @@ let initializeFeelingTracker = (function() {
         }
 
         log("installing listener")
-        browser.runtime.onMessage.addListener(data => {
-            log("message received", data)
-            switch (data.trigger) {
-                case "showFeelingTrackerDialog":
-                    showFeelingTrackerDialog();
-                    break;
-                case "toggleFeelingTracker":
-                    toggleEnabled();
-                    break;
-            }
-        });
+        if (isExtensionContextValid()) {
+            browser.runtime.onMessage.addListener(data => {
+                log("message received", data)
+                switch (data.trigger) {
+                    case "showFeelingTrackerDialog":
+                        showFeelingTrackerDialog();
+                        break;
+                    case "toggleFeelingTracker":
+                        toggleEnabled();
+                        break;
+                }
+            });
+        } else {
+            debug('Extension context invalid, cannot install message listener');
+        }
     }
 
     return initializeFeelingTracker

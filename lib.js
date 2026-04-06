@@ -12,22 +12,71 @@ function initLogger(module) {
     return { log, debug, error }
 }
 
-var __iter = 0;
-function waitForElementToBeLoaded(selector, callback, elementTest) {
-    function out(elem) {
-        if ((__iter++ % 5) == 0) {
-            console.debug("[lib/wait]:", selector, elem, (elementTest && elementTest(elem) || "nil"))
-        }
-    }
-    const tid = setInterval(function() {
-        const x = document.querySelector(selector);
+function waitForElementToBeLoaded(selector, callback, elementTest, config) {
+    // Default configuration
+    const defaultConfig = {
+        initialWait: 100,      // Starting wait time in ms
+        increaseAfter: 10,     // Iterations before starting to increase
+        increaseBy: 1.5,       // Multiplier
+        maxWait: 5000          // Maximum wait time in ms
+    };
+
+    const cfg = Object.assign({}, defaultConfig, config || {});
+
+    let iteration = 0;
+    let currentWait = cfg.initialWait;
+    let timeoutId;
+
+    function checkElement() {
+        iteration++;
+
         // wait for x element to have been loaded, ie: not null & has width
-        if (x == null || x.offsetWidth <= 0 || x.offsetHeight <= 0) { out(x); return }
-        if (elementTest && !elementTest(x)) { out(x); return }
-        // x was loaded, go ahead!
-        clearInterval(tid);
+        const x = document.querySelector(selector);
+        if (x == null || x.offsetWidth <= 0 || x.offsetHeight <= 0) {
+            scheduleNextCheck();
+            return;
+        }
+
+        // Optional validation function (e.g., check for children)
+        if (elementTest && !elementTest(x)) {
+            console.debug(`[lib/wait] Element ${selector} found but validation failed, waiting...`);
+            scheduleNextCheck();
+            return;
+        }
+
+        // x was loaded and validated, go ahead!
+        console.debug(`[lib/wait] Element ${selector} loaded and validated after ${iteration} iterations`);
         callback(x);
-    }, 100);
+    }
+
+    function scheduleNextCheck() {
+        // Update wait time if we've passed the threshold
+        if (iteration >= cfg.increaseAfter) {
+            const oldWait = currentWait;
+
+            // Calculate new wait time
+            if (typeof cfg.increaseBy === 'function') {
+                currentWait = cfg.increaseBy(iteration, currentWait);
+            } else {
+                // Assume it's a multiplier
+                currentWait = currentWait * cfg.increaseBy;
+            }
+
+            // Cap at maxWait
+            currentWait = Math.min(currentWait, cfg.maxWait);
+
+            // Log if wait time changed
+            if (oldWait !== currentWait) {
+                console.debug(`[lib/wait] Increasing wait time from ${oldWait}ms to ${currentWait}ms (iteration ${iteration})`);
+            }
+        }
+
+        // Schedule next check
+        timeoutId = setTimeout(checkElement, currentWait);
+    }
+
+    // Start the first check
+    timeoutId = setTimeout(checkElement, currentWait);
 }
 
 function saveFile(filename, data) {
