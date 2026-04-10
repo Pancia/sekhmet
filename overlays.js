@@ -251,7 +251,7 @@ let initializeOverlays = (function() {
             `;
 
             // Add pressAndHold behavior
-            revealButton.pressAndHold({ holdTime: holdTime, isClickDisabled: true });
+            revealButton.pressAndHold({ holdTime: holdTime, isClickDisabled: true, progressMemory: "instance", progressIndicatorColor: "#ffffff", progressIndicatorOpacity: 0.4 });
 
             // When button is held, remove this overlay and adjacent ones
             revealButton.addEventListener('complete.pressAndHold', () => {
@@ -378,7 +378,7 @@ let initializeOverlays = (function() {
                     z-index: 1;
                 `;
 
-                revealButton.pressAndHold({ holdTime: holdTime, isClickDisabled: true });
+                revealButton.pressAndHold({ holdTime: holdTime, isClickDisabled: true, progressMemory: "instance", progressIndicatorColor: "#ffffff", progressIndicatorOpacity: 0.4 });
 
                 revealButton.addEventListener('complete.pressAndHold', () => {
                     overlay.remove();

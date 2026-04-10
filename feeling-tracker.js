@@ -101,7 +101,7 @@ let initializeFeelingTracker = (function() {
             return safeStorageSet(data)
                 .then(() => {
                     log(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
-                    alert(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'}`);
+                    updateStatusButton();
                 })
                 .catch(err => {
                     error(`Error toggling enabled state: ${err}`);
@@ -158,7 +158,7 @@ let initializeFeelingTracker = (function() {
         setStoredValue(STORAGE_KEY_LASTACTIVE, currentTime);
     }
 
-    async function showFeelingTrackerDialog() {
+    async function showFeelingTrackerDialog({ debug: isDebug = false } = {}) {
         if (videoElement && !videoElement.paused) {
             videoElement.pause();
         }
@@ -192,20 +192,38 @@ let initializeFeelingTracker = (function() {
 
         document.body.appendChild(dialog);
 
-        let holdTime = 10000;
+        let holdTime = isDebug ? 1000 : 10000;
+        let sharedProgress = { accumulated: 0 };
 
         let better = document.getElementById('feeling-better');
-        better.pressAndHold({ holdTime, isClickDisabled: true });
+        let neutral = document.getElementById('feeling-neutral');
+        let worse = document.getElementById('feeling-worse');
+        let buttons = [better, neutral, worse];
+
+        // When a button is clicked, hide progress bars on the other buttons
+        function resetSiblingBars(activeButton) {
+            for (const btn of buttons) {
+                if (btn !== activeButton) {
+                    const bar = btn.querySelector('.holdButtonProgress');
+                    if (bar) bar.style.left = '-100%';
+                }
+            }
+        }
+
+        const holdOpts = { holdTime, isClickDisabled: true, progressMemory: sharedProgress, progressIndicatorColor: '#FFD700', progressIndicatorOpacity: 1 };
+
+        better.pressAndHold(holdOpts);
+        better.addEventListener('mousedown', () => resetSiblingBars(better));
         better.addEventListener('complete.pressAndHold', () => {
             trackFeeling('better');
         });
-        let neutral = document.getElementById('feeling-neutral');
-        neutral.pressAndHold({ holdTime, isClickDisabled: true });
+        neutral.pressAndHold(holdOpts);
+        neutral.addEventListener('mousedown', () => resetSiblingBars(neutral));
         neutral.addEventListener('complete.pressAndHold', () => {
             trackFeeling('neutral');
         });
-        let worse = document.getElementById('feeling-worse');
-        worse.pressAndHold({ holdTime, isClickDisabled: true });
+        worse.pressAndHold(holdOpts);
+        worse.addEventListener('mousedown', () => resetSiblingBars(worse));
         worse.addEventListener('complete.pressAndHold', () => {
             trackFeeling('worse');
         });
@@ -229,9 +247,15 @@ let initializeFeelingTracker = (function() {
         let watchedVideos = await getStoredValue("watchedVideos")
         log("watchedVideos", watchedVideos)
 
-        /*saveFile(`feeling-tracker.${timestamp}.txt`, JSON.stringify({
-            feeling, watchedVideos
-        }));*/
+        browser.runtime.sendMessage({
+            action: "saveFile",
+            filename: `feeling-tracker/${timestamp}.json`,
+            content: JSON.stringify({
+                feeling,
+                accumulatedPlaySeconds: Math.round(accumulatedPlayTime / 1000),
+                watchedVideos
+            }, null, 2)
+        });
 
         setStoredValue("watchedVideos", [])
 
@@ -388,6 +412,241 @@ let initializeFeelingTracker = (function() {
         });
     }
 
+    // Status button state
+    let statusButton = null;
+    let statusUpdateInterval = null;
+
+    function getStatusInfo() {
+        const enabled = statusButton?.dataset.enabled === 'true';
+        const tracking = !!(videoElement && !videoElement.paused && lastPlayTimestamp && enabled);
+        const contextValid = isExtensionContextValid();
+
+        let color, title;
+        if (!contextValid) {
+            color = '#888';
+            title = 'Extension context lost';
+        } else if (!enabled) {
+            color = '#F44336';
+            title = 'Feeling tracker: disabled';
+        } else if (tracking) {
+            color = '#4CAF50';
+            title = 'Feeling tracker: active';
+        } else {
+            color = '#FFC107';
+            title = 'Feeling tracker: enabled (idle)';
+        }
+        return { enabled, tracking, contextValid, color, title };
+    }
+
+    function updateStatusButton() {
+        if (!statusButton) return;
+        isEnabled().then(enabled => {
+            statusButton.dataset.enabled = enabled;
+            const info = getStatusInfo();
+            const dot = document.getElementById("ytft-status-dot");
+            if (dot) dot.style.backgroundColor = info.color;
+            statusButton.title = info.title;
+        });
+    }
+
+    function createStatusButton() {
+        waitForElementToBeLoaded("#center.ytd-masthead", () => {
+            waitForElementToBeLoaded("#avatar-btn", () => {
+                document.querySelectorAll("#ytft-status").forEach(i => i.remove());
+
+                const container = document.createElement("div");
+                container.style.display = "inline-block";
+                container.style.position = "relative";
+                container.style.marginRight = "8px";
+
+                statusButton = document.createElement("a");
+                statusButton.textContent = "🧭";
+                statusButton.id = "ytft-status";
+                statusButton.style.fontSize = "32px";
+                statusButton.style.cursor = "pointer";
+                statusButton.style.userSelect = "none";
+                statusButton.title = "Feeling tracker: loading...";
+                statusButton.addEventListener("click", openStatusMenu);
+
+                const dot = document.createElement("span");
+                dot.id = "ytft-status-dot";
+                dot.style.position = "absolute";
+                dot.style.bottom = "2px";
+                dot.style.right = "-2px";
+                dot.style.width = "12px";
+                dot.style.height = "12px";
+                dot.style.borderRadius = "50%";
+                dot.style.backgroundColor = "#888";
+                dot.style.border = "2px solid white";
+                dot.style.pointerEvents = "none";
+
+                container.appendChild(statusButton);
+                container.appendChild(dot);
+
+                const endContainer = document.querySelector("#center.ytd-masthead");
+                if (endContainer) {
+                    endContainer.prepend(container);
+                }
+
+                updateStatusButton();
+                statusUpdateInterval = setInterval(updateStatusButton, 2000);
+            });
+        });
+    }
+
+    function openStatusMenu() {
+        // Remove existing menu if open
+        const existing = document.getElementById('ytft-status-menu-backdrop');
+        if (existing) {
+            existing._closeDialog?.();
+            existing.remove();
+            return;
+        }
+
+        const info = getStatusInfo();
+
+        const backdrop = document.createElement("div");
+        backdrop.id = "ytft-status-menu-backdrop";
+        backdrop.style.position = "fixed";
+        backdrop.style.top = "0";
+        backdrop.style.left = "0";
+        backdrop.style.width = "100%";
+        backdrop.style.height = "100%";
+        backdrop.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+        backdrop.style.zIndex = "9999";
+        backdrop.style.display = "flex";
+        backdrop.style.justifyContent = "center";
+        backdrop.style.alignItems = "center";
+
+        const panel = document.createElement("div");
+        panel.style.backgroundColor = "white";
+        panel.style.borderRadius = "12px";
+        panel.style.padding = "30px";
+        panel.style.width = "480px";
+        panel.style.maxWidth = "90%";
+        panel.style.color = "#333";
+
+        const title = document.createElement("h2");
+        title.textContent = "Feeling Tracker Status";
+        title.style.margin = "0 0 24px 0";
+        title.style.textAlign = "center";
+        title.style.fontSize = "28px";
+        panel.appendChild(title);
+
+        // Status rows container
+        const rowsContainer = document.createElement("div");
+        rowsContainer.id = "ytft-status-rows";
+        panel.appendChild(rowsContainer);
+
+        function getRowData() {
+            const info = getStatusInfo();
+            return [
+                { label: "Extension context", value: info.contextValid ? "Valid" : "Lost", color: info.contextValid ? "#4CAF50" : "#F44336" },
+                { label: "Enabled", value: info.enabled ? "Yes" : "No", color: info.enabled ? "#4CAF50" : "#F44336" },
+                { label: "Tracking", value: info.tracking ? "Active" : "Idle", color: info.tracking ? "#4CAF50" : "#FFC107" },
+                { label: "Video element", value: videoElement ? "Found" : "Not found", color: videoElement ? "#4CAF50" : "#F44336" },
+                { label: "Accumulated time", value: `${Math.round(accumulatedPlayTime / 1000)}s / ${Math.round(checkIntervalMs / 1000)}s`, color: "#333" },
+                { label: "Tab ID", value: currentTabId ?? "Unknown", color: "#333" },
+            ];
+        }
+
+        function renderRows() {
+            rowsContainer.innerHTML = "";
+            getRowData().forEach(row => {
+                const div = document.createElement("div");
+                div.style.display = "flex";
+                div.style.justifyContent = "space-between";
+                div.style.alignItems = "center";
+                div.style.padding = "10px 0";
+                div.style.borderBottom = "1px solid #eee";
+
+                const lbl = document.createElement("span");
+                lbl.textContent = row.label;
+                lbl.style.fontWeight = "bold";
+                lbl.style.fontSize = "20px";
+
+                const val = document.createElement("span");
+                val.textContent = row.value;
+                val.style.color = row.color;
+                val.style.fontSize = "20px";
+
+                div.appendChild(lbl);
+                div.appendChild(val);
+                rowsContainer.appendChild(div);
+            });
+        }
+
+        renderRows();
+        const dialogRefreshInterval = setInterval(renderRows, 1000);
+
+        function closeDialog() {
+            clearInterval(dialogRefreshInterval);
+            backdrop.remove();
+        }
+        backdrop._closeDialog = closeDialog;
+
+        // Toggle button
+        const toggleBtn = document.createElement("button");
+        toggleBtn.textContent = info.enabled ? "Disable Tracker" : "Enable Tracker";
+        toggleBtn.style.display = "block";
+        toggleBtn.style.width = "100%";
+        toggleBtn.style.padding = "14px";
+        toggleBtn.style.marginTop = "20px";
+        toggleBtn.style.border = "none";
+        toggleBtn.style.borderRadius = "6px";
+        toggleBtn.style.backgroundColor = info.enabled ? "#F44336" : "#4CAF50";
+        toggleBtn.style.color = "white";
+        toggleBtn.style.cursor = "pointer";
+        toggleBtn.style.fontSize = "18px";
+        toggleBtn.addEventListener("click", () => {
+            toggleEnabled();
+            closeDialog();
+            setTimeout(updateStatusButton, 500);
+        });
+        panel.appendChild(toggleBtn);
+
+        // Trigger dialog button
+        const triggerBtn = document.createElement("button");
+        triggerBtn.textContent = "Show Feeling Dialog (Debug)";
+        triggerBtn.style.display = "block";
+        triggerBtn.style.width = "100%";
+        triggerBtn.style.padding = "14px";
+        triggerBtn.style.marginTop = "10px";
+        triggerBtn.style.border = "none";
+        triggerBtn.style.borderRadius = "6px";
+        triggerBtn.style.backgroundColor = "#2196F3";
+        triggerBtn.style.color = "white";
+        triggerBtn.style.cursor = "pointer";
+        triggerBtn.style.fontSize = "18px";
+        triggerBtn.addEventListener("click", () => {
+            closeDialog();
+            showFeelingTrackerDialog({ debug: true });
+        });
+        panel.appendChild(triggerBtn);
+
+        // Close button
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "Close";
+        closeBtn.style.display = "block";
+        closeBtn.style.width = "100%";
+        closeBtn.style.padding = "12px";
+        closeBtn.style.marginTop = "10px";
+        closeBtn.style.border = "1px solid #ccc";
+        closeBtn.style.borderRadius = "6px";
+        closeBtn.style.backgroundColor = "white";
+        closeBtn.style.color = "#333";
+        closeBtn.style.cursor = "pointer";
+        closeBtn.style.fontSize = "18px";
+        closeBtn.addEventListener("click", () => closeDialog());
+        panel.appendChild(closeBtn);
+
+        backdrop.appendChild(panel);
+        backdrop.addEventListener("click", (e) => {
+            if (e.target === backdrop) closeDialog();
+        });
+        document.body.appendChild(backdrop);
+    }
+
     // Function to initialize the feeling tracker
     function initializeFeelingTracker() {
         // Check if extension context is valid
@@ -396,7 +655,12 @@ let initializeFeelingTracker = (function() {
             return;
         }
 
-        // Only run on YouTube watch pages
+        // Create status button on any YouTube page
+        if (window.location.hostname === "www.youtube.com") {
+            createStatusButton();
+        }
+
+        // Only run tracking on YouTube watch pages
         if (window.location.hostname !== "www.youtube.com" || !window.location.pathname.includes("/watch")) {
             return;
         }
@@ -451,16 +715,83 @@ let initializeFeelingTracker = (function() {
             setTimeout(initializeFeelingTracker, 1000);
         }
 
+    function showColorTestDialog() {
+        const existing = document.getElementById('color-test-backdrop');
+        if (existing) existing.remove();
+
+        const baseColor = { name: 'Neutral', color: '#2196F3' };
+
+        const overlayColors = [
+            { name: 'White', color: '#ffffff' },
+            { name: 'Gold', color: '#FFD700' },
+            { name: 'Light Gold', color: '#FFECB3' },
+            { name: 'Amber', color: '#FFC107' },
+            { name: 'Pale Yellow', color: '#FFF9C4' },
+            { name: 'Silver', color: '#C0C0C0' },
+            { name: 'Cyan', color: '#00BCD4' },
+            { name: 'Light Cyan', color: '#B2EBF2' },
+            { name: 'Peach', color: '#FFAB91' },
+            { name: 'Coral', color: '#FF7043' },
+            { name: 'Lavender', color: '#CE93D8' },
+            { name: 'Mint', color: '#A5D6A7' },
+            { name: 'Sky Blue', color: '#81D4FA' },
+            { name: 'Orange', color: '#FF9800' },
+        ];
+
+        const opacities = [0.3, 0.4, 0.5, 0.6, 0.7];
+
+        const backdrop = document.createElement('div');
+        backdrop.id = 'color-test-backdrop';
+        backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:999999;display:flex;align-items:center;justify-content:center;';
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'background:#1a1a1a;color:#fff;padding:24px;border-radius:12px;max-height:85vh;overflow-y:auto;max-width:90vw;';
+
+        let html = '<h2 style="margin-top:0;margin-bottom:16px;">Blue Overlay Color Test</h2>';
+
+        // Original button
+        html += '<h3 style="margin-bottom:8px;color:#aaa;">Original (no overlay)</h3>';
+        html += `<div style="width:180px;height:40px;background:${baseColor.color};border-radius:4px;margin-bottom:20px;"></div>`;
+
+        // Grid: each overlay color as a row, opacities as columns
+        html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">';
+        html += '<div style="width:110px;"></div>';
+        for (const opacity of opacities) {
+            html += `<div style="width:180px;text-align:center;font-size:11px;color:#666;">${Math.round(opacity * 100)}%</div>`;
+        }
+        html += '</div>';
+
+        for (const overlay of overlayColors) {
+            html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">`;
+            html += `<div style="width:110px;font-size:12px;color:#aaa;flex-shrink:0;">${overlay.name}<br><span style="font-size:10px;color:#666;">${overlay.color}</span></div>`;
+            for (const opacity of opacities) {
+                html += `<div style="width:180px;height:40px;border-radius:4px;position:relative;overflow:hidden;">
+                    <div style="width:100%;height:100%;background:${baseColor.color};"></div>
+                    <div style="position:absolute;top:0;left:0;width:60%;height:100%;background:${overlay.color};opacity:${opacity};"></div>
+                </div>`;
+            }
+            html += '</div>';
+        }
+
+        dialog.innerHTML = html;
+        backdrop.appendChild(dialog);
+        document.body.appendChild(backdrop);
+    }
+
         log("installing listener")
         if (isExtensionContextValid()) {
             browser.runtime.onMessage.addListener(data => {
                 log("message received", data)
                 switch (data.trigger) {
                     case "showFeelingTrackerDialog":
-                        showFeelingTrackerDialog();
+                        showFeelingTrackerDialog({ debug: true });
                         break;
                     case "toggleFeelingTracker":
                         toggleEnabled();
+                        break;
+                    case "showColorTest":
+                        showColorTestDialog();
                         break;
                 }
             });

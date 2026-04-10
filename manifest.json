@@ -11,7 +11,7 @@
     "background": {
         "scripts": ["polyfill.js", "background.js"]
     },
-    "permissions": ["storage", "tabs", "contextMenus"],
+    "permissions": ["storage", "tabs", "contextMenus", "nativeMessaging"],
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],

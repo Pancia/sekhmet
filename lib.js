@@ -107,6 +107,7 @@ function initPressAndHoldPlugin() {
         this.settings = Object.assign({}, defaults, options);
         this._defaults = defaults;
         this._name = pressAndHold;
+        this._accumulated = 0;
         this.init();
     }
 
@@ -114,7 +115,8 @@ function initPressAndHoldPlugin() {
         init: function() {
             const _this = this;
             let timer;
-            let decaCounter;
+            let elapsed;
+            let startTime;
             let isActive = false;
             let progressIndicatorHTML;
 
@@ -123,32 +125,93 @@ function initPressAndHoldPlugin() {
             this.element.style.overflow = 'hidden';
             this.element.style.position = 'relative';
 
+            // Wrap existing content so it stays above the progress bar
+            const contentWrapper = document.createElement('span');
+            contentWrapper.style.position = 'relative';
+            contentWrapper.style.zIndex = '1';
+            while (this.element.firstChild) {
+                contentWrapper.appendChild(this.element.firstChild);
+            }
+            this.element.appendChild(contentWrapper);
+
             // Create progress indicator
-            progressIndicatorHTML = `<div class="holdButtonProgress" style="height: 100%; width: 100%; position: absolute; top: 0; left: -100%; background-color:${this.settings.progressIndicatorColor}; opacity:${this.settings.progressIndicatorOpacity};"></div>`;
+            progressIndicatorHTML = `<div class="holdButtonProgress" style="height: 100%; width: 100%; position: absolute; top: 0; left: -100%; z-index: 0; background-color:${this.settings.progressIndicatorColor}; opacity:${this.settings.progressIndicatorOpacity};"></div>`;
             this.element.insertAdjacentHTML('afterbegin', progressIndicatorHTML);
+
+            function readAccumulated() {
+                const mem = _this.settings.progressMemory;
+                if (mem && typeof mem === 'object') {
+                    return mem.accumulated;
+                } else if (mem === "instance") {
+                    return _this._accumulated;
+                }
+                return 0;
+            }
+
+            function saveAccumulated(value) {
+                const mem = _this.settings.progressMemory;
+                if (mem && typeof mem === 'object') {
+                    mem.accumulated = value;
+                } else if (mem === "instance") {
+                    _this._accumulated = value;
+                }
+            }
+
+            function resetAccumulated() {
+                const mem = _this.settings.progressMemory;
+                if (mem && typeof mem === 'object') {
+                    mem.accumulated = 0;
+                } else if (mem === "instance") {
+                    _this._accumulated = 0;
+                }
+            }
+
+            function pause() {
+                if (!isActive) return;
+                isActive = false;
+                clearInterval(timer);
+                elapsed += Date.now() - startTime;
+
+                if (_this.settings.progressMemory) {
+                    // Save progress, leave bar in place
+                    saveAccumulated(elapsed);
+                } else {
+                    _this.exitTimer(timer);
+                }
+            }
 
             // Add mousedown event
             this.element.addEventListener('mousedown', function(e) {
                 if (e.button == 2) { return; }
                 if (isActive) {
                     if (_this.settings.isClickDisabled !== true) {
-                        decaCounter += 100;
+                        elapsed += 100;
                     }
                 } else {
-                    // Trigger start event
-                    const startEvent = new CustomEvent('start.pressAndHold');
-                    _this.element.dispatchEvent(startEvent);
-
                     isActive = true;
-                    decaCounter = 0;
+                    elapsed = readAccumulated();
+                    startTime = Date.now();
+
+                    // Only fire start event on fresh start, not resume
+                    if (elapsed === 0) {
+                        const startEvent = new CustomEvent('start.pressAndHold');
+                        _this.element.dispatchEvent(startEvent);
+                    }
+
+                    // Set progress bar to current accumulated position immediately
+                    const initialProgress = ((elapsed / _this.settings.holdTime) * 100 - 100) + "%";
+                    _this.element.querySelector(".holdButtonProgress").style.left = initialProgress;
 
                     timer = setInterval(function() {
-                        decaCounter += 10;
-                        const progress = ((decaCounter / _this.settings.holdTime) * 100 - 100) + "%";
+                        const now = Date.now();
+                        elapsed += now - startTime;
+                        startTime = now;
+                        const progress = ((elapsed / _this.settings.holdTime) * 100 - 100) + "%";
                         _this.element.querySelector(".holdButtonProgress").style.left = progress;
 
-                        if (decaCounter >= _this.settings.holdTime) {
+                        if (elapsed >= _this.settings.holdTime) {
                             isActive = false;
+                            resetAccumulated();
                             _this.exitTimer(timer);
 
                             // Trigger complete event
@@ -157,11 +220,10 @@ function initPressAndHoldPlugin() {
                         }
                     }, 10);
 
-                    // Add mouseleave listener
-                    _this.element.addEventListener('mouseleave', function handler(event) {
-                        isActive = false;
-                        _this.exitTimer(timer);
-                        _this.element.removeEventListener('mouseleave', handler);
+                    // Add self-removing mouseleave listener
+                    _this.element.addEventListener('mouseleave', function leaveHandler(event) {
+                        pause();
+                        _this.element.removeEventListener('mouseleave', leaveHandler);
                     });
                 }
             });
@@ -169,12 +231,12 @@ function initPressAndHoldPlugin() {
 
         exitTimer: function(timer) {
             const _this = this;
-            clearTimeout(timer);
+            clearInterval(timer);
 
             setTimeout(function() {
-                const progressElements = document.querySelectorAll(".holdButtonProgress");
-                for (let i = 0; i < progressElements.length; i++) {
-                    progressElements[i].style.left = "-100%";
+                const progressEl = _this.element.querySelector(".holdButtonProgress");
+                if (progressEl) {
+                    progressEl.style.left = "-100%";
                 }
                 const endEvent = new CustomEvent('end.pressAndHold');
                 _this.element.dispatchEvent(endEvent);
