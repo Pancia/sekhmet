@@ -102,6 +102,12 @@ let initializeFeelingTracker = (function() {
             return safeStorageSet(data)
                 .then(() => {
                     log(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
+                    if (!newState) {
+                        const dialog = document.getElementById('feeling-dialog');
+                        if (dialog) dialog.remove();
+                        stopPauseEnforcer();
+                        lastPlayTimestamp = null;
+                    }
                     updateStatusButton();
                 })
                 .catch(err => {
