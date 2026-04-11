@@ -1,7 +1,23 @@
-function YTDL(downloadType) {
+const YTDL_QUALITY_KEY = "ytdl.videoQuality";
+
+function getYTDLVideoQuality() {
+    return sessionStorage.getItem(YTDL_QUALITY_KEY) === "best" ? "best" : "regular";
+}
+
+function setYTDLVideoQuality(q) {
+    sessionStorage.setItem(YTDL_QUALITY_KEY, q === "best" ? "best" : "regular");
+}
+
+function YTDL(downloadType, opts = {}) {
     const qp = new URLSearchParams(window.location.search);
     const fileName = (qp.get("list") && !qp.get("v")) ? qp.get("list")+".playlist" : qp.get("v")+".single";
-    saveFile(fileName+`.${downloadType}.ytdl`, "ytdl gen, please ignore");
+
+    const payload = {};
+    if (downloadType === "video" && opts.quality === "best") {
+        payload.quality = "best";
+    }
+    const contents = Object.keys(payload).length ? JSON.stringify(payload) : "";
+    saveFile(fileName+`.${downloadType}.ytdl`, contents);
 }
 
 function initializeYTDL() {
@@ -32,6 +48,43 @@ function initializeYTDL() {
             }
         });
     });
+
+    // Segmented Regular/Best toggle for the Video row
+    function createQualityToggle() {
+        const wrap = document.createElement("div");
+        wrap.style.display = "inline-flex";
+        wrap.style.border = "1px solid #ccc";
+        wrap.style.borderRadius = "4px";
+        wrap.style.overflow = "hidden";
+        wrap.style.fontSize = "12px";
+        wrap.addEventListener("click", (e) => e.stopPropagation());
+
+        const current = getYTDLVideoQuality();
+        const mkBtn = (label, value) => {
+            const b = document.createElement("button");
+            b.type = "button";
+            b.textContent = label;
+            b.dataset.value = value;
+            b.style.border = "none";
+            b.style.padding = "4px 8px";
+            b.style.cursor = "pointer";
+            b.style.background = value === current ? "#1976d2" : "#fff";
+            b.style.color = value === current ? "#fff" : "#333";
+            b.addEventListener("click", () => {
+                setYTDLVideoQuality(value);
+                wrap.querySelectorAll("button").forEach(btn => {
+                    const active = btn.dataset.value === value;
+                    btn.style.background = active ? "#1976d2" : "#fff";
+                    btn.style.color = active ? "#fff" : "#333";
+                });
+            });
+            return b;
+        };
+
+        wrap.appendChild(mkBtn("Regular", "regular"));
+        wrap.appendChild(mkBtn("Best", "best"));
+        return wrap;
+    }
 
     // Function to create and open the download dialog
     function openDownloadDialog() {
@@ -99,7 +152,19 @@ function initializeYTDL() {
 
             // Click handler
             listItem.addEventListener("click", () => {
-                YTDL(option.type);
+                if (option.type === "video") {
+                    const quality = getYTDLVideoQuality();
+                    const qp = new URLSearchParams(window.location.search);
+                    const isPlaylist = qp.get("list") && !qp.get("v");
+                    if (quality === "best" && isPlaylist) {
+                        if (!window.confirm("Best quality on a full playlist can be huge. Continue?")) {
+                            return;
+                        }
+                    }
+                    YTDL("video", { quality });
+                } else {
+                    YTDL(option.type);
+                }
                 document.body.removeChild(dialogBackdrop);
             });
 
@@ -113,9 +178,15 @@ function initializeYTDL() {
             const text = document.createElement("span");
             text.textContent = option.text;
             text.style.fontSize = "16px";
+            text.style.flex = "1";
 
             listItem.appendChild(icon);
             listItem.appendChild(text);
+
+            if (option.type === "video") {
+                listItem.appendChild(createQualityToggle());
+            }
+
             optionsList.appendChild(listItem);
         });
 
