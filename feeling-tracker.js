@@ -43,6 +43,7 @@ let initializeFeelingTracker = (function() {
 
     const CHECK_INTERVAL_MINUTES = 7.5;
     const SESSION_TIMEOUT_MINUTES = 5;
+    const PAUSE_ENFORCER_MS = 100;
     const STORAGE_KEY_PLAYTIME = 'ytf_accumulatedPlayTime';
     const STORAGE_KEY_LASTACTIVE = 'ytf_lastActiveTime';
     const STORAGE_KEY_ENABLED = 'ytf_feelingTracker_enabled';
@@ -158,13 +159,27 @@ let initializeFeelingTracker = (function() {
         setStoredValue(STORAGE_KEY_LASTACTIVE, currentTime);
     }
 
+    function getLiveVideoElement() {
+        // YouTube is a SPA — the cached videoElement can become stale
+        // or disconnected after navigation. Prefer a fresh query, and
+        // refresh the cache if the current one is no longer in the DOM.
+        if (!videoElement || !videoElement.isConnected) {
+            const fresh = document.querySelector('video');
+            if (fresh) videoElement = fresh;
+        }
+        return videoElement;
+    }
+
     async function showFeelingTrackerDialog({ debug: isDebug = false } = {}) {
-        if (videoElement && !videoElement.paused) {
-            videoElement.pause();
+        const v = getLiveVideoElement();
+        if (v && !v.paused) {
+            v.pause();
         }
 
         let d = document.getElementById('feeling-dialog')
         if (d) { return }
+
+        startPauseEnforcer();
 
         const dialog = document.createElement('div');
         dialog.id = 'feeling-dialog';
@@ -309,6 +324,31 @@ let initializeFeelingTracker = (function() {
                 });
             }
         }, 1000); // Check every second
+    }
+
+    // Dedicated pause enforcer — runs only while the feeling dialog is up,
+    // and re-pauses the video immediately if the user sneaks an un-pause
+    // past us. Decoupled from the accumulator loop so it doesn't depend
+    // on async isEnabled() chains or threshold math.
+    let pauseEnforcerTimer = null;
+    function startPauseEnforcer() {
+        if (pauseEnforcerTimer) return;
+        pauseEnforcerTimer = setInterval(() => {
+            if (!document.getElementById('feeling-dialog')) {
+                stopPauseEnforcer();
+                return;
+            }
+            const v = getLiveVideoElement();
+            if (v && !v.paused) {
+                v.pause();
+            }
+        }, PAUSE_ENFORCER_MS);
+    }
+    function stopPauseEnforcer() {
+        if (pauseEnforcerTimer) {
+            clearInterval(pauseEnforcerTimer);
+            pauseEnforcerTimer = null;
+        }
     }
 
     // Handle video play/pause events to track actual playing time
