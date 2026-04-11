@@ -169,7 +169,7 @@ function initPressAndHoldPlugin() {
             function pause() {
                 if (!isActive) return;
                 isActive = false;
-                clearInterval(timer);
+                cancelAnimationFrame(timer);
                 elapsed += Date.now() - startTime;
 
                 if (_this.settings.progressMemory) {
@@ -202,23 +202,27 @@ function initPressAndHoldPlugin() {
                     const initialProgress = ((elapsed / _this.settings.holdTime) * 100 - 100) + "%";
                     _this.element.querySelector(".holdButtonProgress").style.left = initialProgress;
 
-                    timer = setInterval(function() {
+                    const bar = _this.element.querySelector(".holdButtonProgress");
+                    function tick() {
+                        if (!isActive) return;
                         const now = Date.now();
-                        elapsed += now - startTime;
-                        startTime = now;
-                        const progress = ((elapsed / _this.settings.holdTime) * 100 - 100) + "%";
-                        _this.element.querySelector(".holdButtonProgress").style.left = progress;
+                        const current = elapsed + (now - startTime);
+                        const pct = Math.min(current / _this.settings.holdTime, 1);
+                        bar.style.left = (pct * 100 - 100) + "%";
 
-                        if (elapsed >= _this.settings.holdTime) {
+                        if (current >= _this.settings.holdTime) {
                             isActive = false;
+                            elapsed = _this.settings.holdTime;
                             resetAccumulated();
                             _this.exitTimer(timer);
 
-                            // Trigger complete event
                             const completeEvent = new CustomEvent('complete.pressAndHold');
                             _this.element.dispatchEvent(completeEvent);
+                            return;
                         }
-                    }, 10);
+                        timer = requestAnimationFrame(tick);
+                    }
+                    timer = requestAnimationFrame(tick);
 
                     // Add self-removing mouseleave listener
                     _this.element.addEventListener('mouseleave', function leaveHandler(event) {
@@ -231,7 +235,7 @@ function initPressAndHoldPlugin() {
 
         exitTimer: function(timer) {
             const _this = this;
-            clearInterval(timer);
+            cancelAnimationFrame(timer);
 
             setTimeout(function() {
                 const progressEl = _this.element.querySelector(".holdButtonProgress");
