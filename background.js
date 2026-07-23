@@ -93,21 +93,41 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
 });
 
 // Handle message for getting tab ID
+// Only async branches that reply later return `true` (keep the channel open).
+// Synchronous / fire-and-forget branches must return undefined.
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === "getTabId") {
-        console.log("YTF: Tab ID requested", sender.tab.id);
-        sendResponse({ tabId: sender.tab.id });
-        return true;
-    }
+    switch (request.action) {
+        case "getTabId":
+            console.log("YTF: Tab ID requested", sender.tab.id);
+            sendResponse({ tabId: sender.tab.id }); // synchronous reply
+            return;
 
-    if (request.action === "saveFile") {
-        browser.runtime.sendNativeMessage(
-            "com.ytf.feeling_tracker",
-            JSON.parse(request.content)
-        ).then(response => {
-            console.log("YTF: Native host response", response);
-        }).catch(err => {
-            console.error("YTF: Native messaging failed", err);
-        });
+        case "saveFile":
+            // Fire-and-forget. Relies on the persistent MV2 background page staying
+            // alive until the native host replies; would need rework under MV3.
+            browser.runtime.sendNativeMessage(
+                "com.ytf.feeling_tracker",
+                JSON.parse(request.content)
+            ).then(response => {
+                console.log("YTF: Native host response", response);
+            }).catch(err => {
+                console.error("YTF: Native messaging failed", err);
+            });
+            return;
+
+        case "ytdlDownload":
+            browser.runtime.sendNativeMessage("com.ytf.ytdl", {
+                id: request.id,
+                videoType: request.videoType,
+                downloadType: request.downloadType,
+                quality: request.quality,
+            }).then(response => {
+                console.log("YTF: ytdl host response", response);
+                sendResponse(response);
+            }).catch(err => {
+                console.error("YTF: ytdl native messaging failed", err);
+                sendResponse({ ok: false, error: String(err) });
+            });
+            return true; // keep the channel open for the async sendResponse
     }
 });

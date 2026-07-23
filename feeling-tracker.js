@@ -701,6 +701,13 @@ let initializeFeelingTracker = (function() {
             return;
         }
 
+        // Don't run in private/incognito windows — feeling data shouldn't be
+        // recorded for private browsing sessions.
+        if (browser.extension && browser.extension.inIncognitoContext) {
+            log('Private browsing context detected, feeling tracker disabled');
+            return;
+        }
+
         // Create status button on any YouTube page
         if (window.location.hostname === "www.youtube.com") {
             createStatusButton();

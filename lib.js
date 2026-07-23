@@ -79,18 +79,214 @@ function waitForElementToBeLoaded(selector, callback, elementTest, config) {
     timeoutId = setTimeout(checkElement, currentWait);
 }
 
-function saveFile(filename, data) {
-    const file = new Blob([data], {type: "text/plain"});
-    const a = document.createElement("a");
-    const url = URL.createObjectURL(file);
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function() {
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-    }, 0);
+// Lightweight in-page toasts. Content scripts share the page's DOM, so
+// everything is inline-styled under one container (plus a single injected
+// keyframes rule) to avoid collisions with YouTube's own stylesheets.
+//
+//   const t = showToast("Sending…", { status: "pending", timeout: 0 });
+//   t.update("Started", { status: "ok" });   // resets the auto-dismiss timer
+//   t.dismiss();
+function showToast(message, options) {
+    const CONTAINER_ID = "ytf-toast-container";
+    const STYLE_ID = "ytf-toast-style";
+    const MAX_VISIBLE = 5;
+    const STATUSES = {
+        pending: { accent: "#3ea6ff", icon: null },   // null => spinner
+        ok:      { accent: "#2ba640", icon: "✅" },
+        error:   { accent: "#f44336", icon: "⚠️" },
+        info:    { accent: "#909090", icon: "ℹ️" }
+    };
+
+    const opts = Object.assign({ status: "info", timeout: 4000 }, options || {});
+
+    function ensureStyle() {
+        if (document.getElementById(STYLE_ID)) return;
+        const style = document.createElement("style");
+        style.id = STYLE_ID;
+        style.textContent = "@keyframes ytf-toast-spin { to { transform: rotate(360deg); } }";
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    function ensureContainer() {
+        let container = document.getElementById(CONTAINER_ID);
+        if (container) return container;
+        container = document.createElement("div");
+        container.id = CONTAINER_ID;
+        Object.assign(container.style, {
+            position: "fixed",
+            // Below YouTube's 56px masthead so toasts don't cover the avatar
+            // / search bar.
+            top: "72px",
+            right: "20px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "8px",
+            // Above the ytdl dialog backdrop (9999) and YouTube's own overlays.
+            zIndex: "2147483000",
+            pointerEvents: "none"
+        });
+        document.body.appendChild(container);
+        return container;
+    }
+
+    ensureStyle();
+    const container = ensureContainer();
+
+    const toast = document.createElement("div");
+    Object.assign(toast.style, {
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "10px",
+        boxSizing: "border-box",
+        minWidth: "220px",
+        maxWidth: "340px",
+        padding: "10px 14px",
+        borderRadius: "8px",
+        borderLeft: "4px solid transparent",
+        backgroundColor: "rgba(28, 28, 28, 0.96)",
+        color: "#fff",
+        fontFamily: "Roboto, Arial, sans-serif",
+        boxShadow: "0 4px 16px rgba(0, 0, 0, 0.45)",
+        cursor: "pointer",
+        pointerEvents: "auto",
+        opacity: "0",
+        transform: "translateY(-8px)",
+        transition: "opacity 0.18s ease, transform 0.18s ease"
+    });
+
+    const iconSlot = document.createElement("span");
+    Object.assign(iconSlot.style, {
+        flex: "0 0 auto",
+        width: "16px",
+        height: "16px",
+        marginTop: "1px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "14px",
+        lineHeight: "16px"
+    });
+
+    const body = document.createElement("div");
+    body.style.flex = "1";
+    body.style.minWidth = "0";
+
+    const title = document.createElement("div");
+    Object.assign(title.style, {
+        fontSize: "13px",
+        fontWeight: "500",
+        lineHeight: "1.35",
+        wordBreak: "break-word"
+    });
+
+    const detail = document.createElement("div");
+    Object.assign(detail.style, {
+        display: "none",
+        marginTop: "3px",
+        fontSize: "11px",
+        lineHeight: "1.35",
+        opacity: "0.7",
+        wordBreak: "break-word"
+    });
+
+    body.appendChild(title);
+    body.appendChild(detail);
+    toast.appendChild(iconSlot);
+    toast.appendChild(body);
+
+    let dismissTimer;
+    let removed = false;
+    let hovered = false;
+    let pendingTimeout = 0;
+
+    function renderStatus(status, iconOverride) {
+        const spec = STATUSES[status] || STATUSES.info;
+        toast.style.borderLeftColor = spec.accent;
+        iconSlot.textContent = "";
+        const icon = iconOverride || spec.icon;
+        if (icon) {
+            iconSlot.textContent = icon;
+            return;
+        }
+        // Pending: spinner instead of a glyph.
+        const spinner = document.createElement("span");
+        Object.assign(spinner.style, {
+            width: "12px",
+            height: "12px",
+            borderRadius: "50%",
+            border: "2px solid rgba(255, 255, 255, 0.25)",
+            borderTopColor: spec.accent,
+            animation: "ytf-toast-spin 0.7s linear infinite"
+        });
+        iconSlot.appendChild(spinner);
+    }
+
+    function scheduleDismiss(timeout) {
+        clearTimeout(dismissTimer);
+        pendingTimeout = timeout;
+        if (!timeout || hovered) return;
+        dismissTimer = setTimeout(dismiss, timeout);
+    }
+
+    function render(text, o) {
+        title.textContent = text;
+        if (o.detail) {
+            detail.textContent = o.detail;
+            detail.style.display = "block";
+        } else {
+            detail.style.display = "none";
+        }
+        renderStatus(o.status, o.icon);
+        scheduleDismiss(o.timeout);
+    }
+
+    function dismiss() {
+        if (removed) return;
+        removed = true;
+        clearTimeout(dismissTimer);
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(-8px)";
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+            if (container.children.length === 0 && container.parentNode) {
+                container.parentNode.removeChild(container);
+            }
+        }, 200);
+    }
+
+    function update(text, o) {
+        if (removed) return handle;
+        render(text, Object.assign({ status: "info", timeout: 4000 }, o || {}));
+        return handle;
+    }
+
+    // Hovering holds the toast open (so long error text stays readable).
+    toast.addEventListener("mouseenter", () => {
+        hovered = true;
+        clearTimeout(dismissTimer);
+    });
+    toast.addEventListener("mouseleave", () => {
+        hovered = false;
+        scheduleDismiss(pendingTimeout);
+    });
+    toast.addEventListener("click", dismiss);
+
+    render(message, opts);
+    container.appendChild(toast);
+
+    // Drop the oldest toasts if they pile up.
+    while (container.children.length > MAX_VISIBLE) {
+        container.removeChild(container.firstChild);
+    }
+
+    requestAnimationFrame(() => {
+        toast.style.opacity = "1";
+        toast.style.transform = "translateY(0)";
+    });
+
+    const handle = { element: toast, update, dismiss };
+    return handle;
 }
 
 function initPressAndHoldPlugin() {

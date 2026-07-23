@@ -8,16 +8,92 @@ function setYTDLVideoQuality(q) {
     sessionStorage.setItem(YTDL_QUALITY_KEY, q === "best" ? "best" : "regular");
 }
 
+const YTDL_LABELS = {
+    music: "🎵 Music",
+    audio: "🎧 Audio",
+    video: "📺 Video",
+    text: "💾 Text",
+    notes: "✏️ Notes",
+};
+
+// How long to wait on the background page before assuming the message went
+// nowhere (native host missing, background page dead, …).
+const YTDL_REPLY_TIMEOUT = 15000;
+
+function describeYTDLRequest(downloadType, videoType, quality) {
+    const parts = [YTDL_LABELS[downloadType] || downloadType];
+    if (quality === "best") parts.push("best");
+    if (videoType === "playlist") parts.push("playlist");
+    return parts.join(" · ");
+}
+
 function YTDL(downloadType, opts = {}) {
     const qp = new URLSearchParams(window.location.search);
-    const fileName = (qp.get("list") && !qp.get("v")) ? qp.get("list")+".playlist" : qp.get("v")+".single";
+    const isPlaylist = qp.get("list") && !qp.get("v");
+    const id = isPlaylist ? qp.get("list") : qp.get("v");
+    const videoType = isPlaylist ? "playlist" : "single";
+    const quality = (downloadType === "video" && opts.quality === "best") ? "best" : "regular";
+    const label = describeYTDLRequest(downloadType, videoType, quality);
 
-    const payload = {};
-    if (downloadType === "video" && opts.quality === "best") {
-        payload.quality = "best";
+    // Toast goes up synchronously, before the message round trip, so the click
+    // always gets immediate feedback.
+    const toast = showToast(`Sending ${label}…`, { status: "pending", timeout: 0 });
+
+    if (!id) {
+        toast.update("No video or playlist in this URL", { status: "error", timeout: 6000 });
+        return;
     }
-    const contents = Object.keys(payload).length ? JSON.stringify(payload) : "";
-    saveFile(fileName+`.${downloadType}.ytdl`, contents);
+
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        toast.update(`No response for ${label}`, {
+            status: "error",
+            detail: "The extension background page never replied — the download may not have started.",
+            timeout: 10000,
+        });
+    }, YTDL_REPLY_TIMEOUT);
+
+    const settle = (text, o) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        toast.update(text, o);
+    };
+
+    // Hand the download off to the native host, which spawns ~/dotfiles/bin/ytdl
+    // detached (fire-and-forget). The reply only reports whether the download was
+    // *started* — completion is surfaced by a macOS notification, not here.
+    browser.runtime.sendMessage({
+        action: "ytdlDownload", id, videoType, downloadType, quality,
+    }).then(r => {
+        if (r && r.ok === false) {
+            settle(`Failed to start ${label}`, {
+                status: "error",
+                detail: r.error,
+                timeout: 10000,
+            });
+        } else if (!r || r.ok !== true) {
+            settle(`Unexpected reply for ${label}`, {
+                status: "error",
+                detail: JSON.stringify(r),
+                timeout: 10000,
+            });
+        } else {
+            settle(`Started ${label}`, {
+                status: "ok",
+                detail: "Running in the background — macOS will notify you when it finishes.",
+                timeout: 5000,
+            });
+        }
+    }).catch(err => {
+        settle(`Failed to start ${label}`, {
+            status: "error",
+            detail: String(err),
+            timeout: 10000,
+        });
+    });
 }
 
 function initializeYTDL() {
@@ -86,6 +162,100 @@ function initializeYTDL() {
         return wrap;
     }
 
+    // Dev-only: exercise the toast UI without touching the native host. Each
+    // click runs the next scenario; the dialog stays open so you can cycle.
+    const TOAST_SCENARIOS = [
+        {
+            name: "pending → ok",
+            run: () => {
+                const t = showToast("Sending 📺 Video · best…", { status: "pending", timeout: 0 });
+                setTimeout(() => t.update("Started 📺 Video · best", {
+                    status: "ok",
+                    detail: "Running in the background — macOS will notify you when it finishes.",
+                    timeout: 5000,
+                }), 1200);
+            },
+        },
+        {
+            name: "pending → error",
+            run: () => {
+                const t = showToast("Sending 🎵 Music…", { status: "pending", timeout: 0 });
+                setTimeout(() => t.update("Failed to start 🎵 Music", {
+                    status: "error",
+                    detail: "Error: No such native application com.ytf.ytdl",
+                    timeout: 10000,
+                }), 1200);
+            },
+        },
+        {
+            name: "info",
+            run: () => showToast("Nothing to download here", {
+                status: "info",
+                detail: "Open a single video or a playlist.",
+                timeout: 5000,
+            }),
+        },
+        {
+            name: "sticky (click to dismiss)",
+            run: () => showToast("Sticky toast — never auto-dismisses", {
+                status: "pending",
+                detail: "Click it to close. Hovering any toast pauses its timer.",
+                timeout: 0,
+            }),
+        },
+        {
+            name: "stack ×8 (max 5 shown)",
+            run: () => {
+                for (let i = 1; i <= 8; i++) {
+                    showToast(`Toast #${i}`, { status: "info", timeout: 6000 });
+                }
+            },
+        },
+    ];
+
+    function createToastDevButton() {
+        let index = 0;
+
+        const wrap = document.createElement("div");
+        wrap.style.marginTop = "15px";
+        wrap.style.paddingTop = "10px";
+        wrap.style.borderTop = "1px solid #e0e0e0";
+
+        const label = document.createElement("div");
+        label.textContent = "DEV";
+        label.style.fontSize = "10px";
+        label.style.letterSpacing = "1px";
+        label.style.color = "#999";
+        label.style.marginBottom = "6px";
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.style.display = "block";
+        btn.style.width = "100%";
+        btn.style.padding = "8px";
+        btn.style.border = "1px solid #ccc";
+        btn.style.borderRadius = "4px";
+        btn.style.backgroundColor = "#fafafa";
+        btn.style.color = "#333";
+        btn.style.fontSize = "13px";
+        btn.style.cursor = "pointer";
+
+        const render = () => {
+            btn.textContent = `🧪 Test toast: ${TOAST_SCENARIOS[index].name}`;
+        };
+
+        btn.addEventListener("click", () => {
+            TOAST_SCENARIOS[index].run();
+            index = (index + 1) % TOAST_SCENARIOS.length;
+            render();
+        });
+
+        render();
+        wrap.appendChild(label);
+        wrap.appendChild(btn);
+        return wrap;
+    }
+
     // Function to create and open the download dialog
     function openDownloadDialog() {
         // Create dialog backdrop
@@ -127,6 +297,7 @@ function initializeYTDL() {
             { icon: "🎵", text: "Music", type: "music" },
             { icon: "🎧", text: "Audio", type: "audio" },
             { icon: "📺", text: "Video", type: "video" },
+            { icon: "🖼️", text: "Thumbnail", type: "thumbnail" },
             { icon: "💾", text: "Text",  type: "text" },
             { icon: "✏️",  text: "Notes", type: "notes" }
         ];
@@ -152,6 +323,27 @@ function initializeYTDL() {
 
             // Click handler
             listItem.addEventListener("click", () => {
+                if (option.type === "thumbnail") {
+                    const qp = new URLSearchParams(window.location.search);
+                    const videoId = qp.get("v");
+                    if (!videoId) {
+                        showToast("No thumbnail here", {
+                            status: "error",
+                            detail: "Open a single video to grab its thumbnail.",
+                            timeout: 6000,
+                        });
+                        return;
+                    }
+                    // maxresdefault isn't guaranteed; fall back to hqdefault if it 404s.
+                    const maxres = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+                    const hq = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                    const img = new Image();
+                    img.onload = () => window.open(maxres, "_blank", "noopener");
+                    img.onerror = () => window.open(hq, "_blank", "noopener");
+                    img.src = maxres;
+                    document.body.removeChild(dialogBackdrop);
+                    return;
+                }
                 if (option.type === "video") {
                     const quality = getYTDLVideoQuality();
                     const qp = new URLSearchParams(window.location.search);
@@ -191,6 +383,7 @@ function initializeYTDL() {
         });
 
         dialogContent.appendChild(optionsList);
+        dialogContent.appendChild(createToastDevButton());
 
         // Close button
         const closeButton = document.createElement("button");
