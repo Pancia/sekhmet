@@ -36,40 +36,70 @@ function getCurrentTab() {
     return browser.tabs.query({ currentWindow: true, active: true });
 }
 
+// Tabs with no content script (or a discarded one) reject with "Could not
+// establish connection", so every send needs a catch or it surfaces as an
+// unhandled rejection in the background console on each click.
+function sendToTab(tabId, trigger) {
+    return browser.tabs.sendMessage(tabId, { trigger })
+        .catch(err => console.log(`YTF: Could not send ${trigger} to tab ${tabId}`, err));
+}
+
 async function showFeelingTracker() {
     console.log("YTF: showFeelingTracker")
     const tabInfo = await getCurrentTab();
     const [{ id: tabId }] = tabInfo;
-    browser.tabs.sendMessage(tabId, { trigger: 'showFeelingTrackerDialog' });
+    sendToTab(tabId, 'showFeelingTrackerDialog');
 }
 
 async function toggleFeelingTracker() {
     console.log("YTF: toggleFeelingTracker")
     const tabInfo = await getCurrentTab();
     const [{ id: tabId }] = tabInfo;
-    browser.tabs.sendMessage(tabId, { trigger: 'toggleFeelingTracker' });
+    sendToTab(tabId, 'toggleFeelingTracker');
 }
 
-// Update context menu title with current status before it shows
+// Update context menu title with current status before it shows.
+// The enable flag is per-tab and lives in that tab's sessionStorage, so we ask
+// the content script rather than reading storage.local here.
 async function updateMenuStatus() {
+    const generic = { title: "Toggle Feeling Tracker" };
     try {
         const tabInfo = await getCurrentTab();
-        const [{ id: tabId }] = tabInfo;
-        const key = `ytf_feelingTracker_enabled_${tabId}`;
-        const result = await browser.storage.local.get(key);
-        const enabled = result[key] !== false;
-        browser.contextMenus.update("ytf-is-enabled", {
-            title: `Feeling Tracker: ${enabled ? "✅ Enabled" : "❌ Disabled"} (click to toggle)`,
+        const [{ id: tabId, url }] = tabInfo;
+
+        // onShown fires for every context menu on every site, so skip the
+        // round trip entirely off YouTube rather than messaging a tab with no
+        // content script and logging the rejection each time.
+        if (!url || !/^https?:\/\/([^/]*\.)?youtube\.com\//.test(url)) {
+            return browser.contextMenus.update("ytf-is-enabled", generic);
+        }
+
+        const response = await browser.tabs.sendMessage(tabId, { trigger: 'getFeelingTrackerState' });
+        // A tab with a receiver but no handler for this trigger resolves with
+        // undefined, so check for the boolean instead of treating "not false"
+        // as enabled — otherwise a tab with no tracker reports "✅ Enabled".
+        if (!response || typeof response.enabled !== 'boolean') {
+            return browser.contextMenus.update("ytf-is-enabled", generic);
+        }
+
+        return browser.contextMenus.update("ytf-is-enabled", {
+            title: `Feeling Tracker: ${response.enabled ? "✅ Enabled" : "❌ Disabled"} (click to toggle)`,
         });
     } catch (err) {
+        // No content script in this tab yet, or it is discarded.
         console.log("YTF: Could not update menu status", err);
+        return browser.contextMenus.update("ytf-is-enabled", generic);
     }
 }
 
 // Update status when context menu is shown (Firefox)
 if (browser.contextMenus.onShown) {
     browser.contextMenus.onShown.addListener(() => {
-        updateMenuStatus().then(() => browser.contextMenus.refresh());
+        // updateMenuStatus resolves only once contextMenus.update has settled,
+        // so refresh() can't race ahead of the title it is meant to show.
+        updateMenuStatus()
+            .then(() => browser.contextMenus.refresh())
+            .catch(err => console.log("YTF: Could not refresh menu", err));
     });
 }
 
@@ -80,14 +110,17 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
             showFeelingTracker();
             break;
         case "color-test":
-            getCurrentTab().then(([{ id: tabId }]) => {
-                browser.tabs.sendMessage(tabId, { trigger: 'showColorTest' });
-            });
+            getCurrentTab().then(([{ id: tabId }]) => sendToTab(tabId, 'showColorTest'));
             break;
         case "ytf-is-enabled":
             toggleFeelingTracker();
-            // Update menu title after toggle
-            setTimeout(updateMenuStatus, 500);
+            // Update menu title after toggle. updateMenuStatus returns the
+            // contextMenus.update promise rather than awaiting it, so its own
+            // try/catch doesn't cover a rejecting update — this call site needs
+            // its own catch or that surfaces as an unhandled rejection.
+            setTimeout(() => {
+                updateMenuStatus().catch(err => console.log("YTF: Could not update menu status", err));
+            }, 500);
             break;
     }
 });

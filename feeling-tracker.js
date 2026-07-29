@@ -46,7 +46,24 @@ let initializeFeelingTracker = (function() {
     const PAUSE_ENFORCER_MS = 100;
     const STORAGE_KEY_PLAYTIME = 'ytf_accumulatedPlayTime';
     const STORAGE_KEY_LASTACTIVE = 'ytf_lastActiveTime';
-    const STORAGE_KEY_ENABLED = 'ytf_feelingTracker_enabled';
+    // Per-tab enable flag, held in the tab's own sessionStorage rather than in
+    // storage.local under a tab-id-derived key.
+    //
+    // Tab ids are documented as unique only "within a browser session", while
+    // storage.local persists indefinitely — so ids get reused across restarts
+    // and the flag detaches from the tab that set it: a disabled tab comes back
+    // enabled, and an unrelated new tab can inherit the dead flag and start
+    // disabled. Anything that closes and reopens a tab (some memory savers do)
+    // has the same effect within a session.
+    //
+    // sessionStorage is per-tab by construction and survives reloads and
+    // same-tab navigation. Session restore preserves it too, though that is
+    // best-effort: it is subject to browser.sessionstore.dom_storage_limit and
+    // only applies when a session is actually restored. Note that duplicating a
+    // tab copies sessionStorage, so a duplicate of a disabled tab starts
+    // disabled.
+    const SESSION_KEY_ENABLED = 'ytf_feelingTracker_enabled';
+    const STORAGE_KEY_MIGRATED = 'ytf_legacyEnabledMigrated';
 
     let checkIntervalMs = CHECK_INTERVAL_MINUTES * 60 * 1000;
     let sessionTimeoutMs = SESSION_TIMEOUT_MINUTES * 60 * 1000;
@@ -64,6 +81,7 @@ let initializeFeelingTracker = (function() {
             .then(response => {
                 currentTabId = response.tabId;
                 log(`Got current tab ID: ${currentTabId}`);
+                migrateLegacyEnabledFlag(currentTabId);
             })
             .catch(err => {
                 if (err.message && err.message.includes('Extension context invalidated')) {
@@ -76,53 +94,120 @@ let initializeFeelingTracker = (function() {
         debug('Extension context invalid, cannot get tab ID');
     }
 
-    function getStorageKey(baseKey) {
-        return currentTabId ? `${baseKey}_${currentTabId}` : baseKey;
+    // Mirrors the sessionStorage value; used only if sessionStorage is
+    // unreachable (blocked site data), so a toggle still holds for the
+    // lifetime of the page.
+    let enabledFallback = true;
+
+    function readEnabled() {
+        try {
+            const raw = window.sessionStorage.getItem(SESSION_KEY_ENABLED);
+            if (raw !== null) {
+                // Keep the mirror current, so if sessionStorage starts throwing
+                // later in the session we fall back to the real value rather
+                // than to a stale default that would re-enable the tracker.
+                enabledFallback = raw !== 'false';
+                return enabledFallback;
+            }
+        } catch (err) {
+            debug(`sessionStorage unavailable for read: ${err}`);
+        }
+        return enabledFallback;
     }
 
-    function isEnabled() {
-        return safeStorageGet(getStorageKey(STORAGE_KEY_ENABLED))
-            .then(result => {
-                const enabled = result[getStorageKey(STORAGE_KEY_ENABLED)] !== false;
-                debug(`Feeling tracker is ${enabled ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
-                return enabled;
-            })
-            .catch(err => {
-                error(`Error checking if enabled: ${err}`);
-                return true; // Default to enabled if there's an error
+    function writeEnabled(value) {
+        enabledFallback = value;
+        try {
+            window.sessionStorage.setItem(SESSION_KEY_ENABLED, String(value));
+        } catch (err) {
+            debug(`sessionStorage unavailable for write: ${err}`);
+        }
+    }
+
+    // One-time upgrade path off the old tab-id-keyed flags. This tab's flag is
+    // carried over if it is still findable under the current id; every other
+    // key matching the legacy shape is unreachable once nothing reads them, so
+    // they are dropped and the accumulated orphans drain on first run.
+    //
+    // Enumerating is what makes the cleanup possible — it does not widen the
+    // migration. If this tab's id already changed, nothing recorded which dead
+    // id belonged to it, so that flag is simply unrecoverable.
+    //
+    // Every YouTube tab runs this on load and the first to finish clears the
+    // set for all of them, so a tab that loses the race skips its own
+    // migration. That only bites during the single upgrade window and degrades
+    // to the previous behaviour, which is why it is left alone.
+    const LEGACY_ENABLED_KEY = /^ytf_feelingTracker_enabled_\d+$/;
+
+    function migrateLegacyEnabledFlag(tabId) {
+        // Cheap single-key check first: get(null) clones the whole of
+        // storage.local across process boundaries, and this runs on every
+        // YouTube page load for the life of the extension.
+        safeStorageGet(STORAGE_KEY_MIGRATED).then(flag => {
+            if (flag[STORAGE_KEY_MIGRATED]) return;
+            if (!isExtensionContextValid()) return;
+
+            // Deliberately not safeStorageGet: it reports a failed read as {},
+            // which is indistinguishable from empty storage and would let us
+            // record the migration as done having read nothing — stranding
+            // every legacy flag permanently. A failed read must retry later.
+            return browser.storage.local.get(null).then(all => {
+                const legacyKeys = Object.keys(all).filter(key => LEGACY_ENABLED_KEY.test(key));
+
+                // Re-checked after the round trip rather than before it: a
+                // toggle may have landed while storage was in flight, and a
+                // deliberate user choice has to win over the migrated value.
+                let alreadySet;
+                try {
+                    alreadySet = window.sessionStorage.getItem(SESSION_KEY_ENABLED) !== null;
+                } catch (err) {
+                    debug(`sessionStorage unavailable, skipping migration: ${err}`);
+                    return;
+                }
+
+                const ownKey = `${SESSION_KEY_ENABLED}_${tabId}`;
+                if (!alreadySet && all[ownKey] === false) {
+                    writeEnabled(false);
+                    log(`Migrated legacy disabled flag for tab ${tabId} into sessionStorage`);
+                    updateStatusButton();
+                }
+
+                if (!isExtensionContextValid()) return;
+                return browser.storage.local.set({ [STORAGE_KEY_MIGRATED]: true })
+                    .then(() => legacyKeys.length ? browser.storage.local.remove(legacyKeys) : null)
+                    .then(() => {
+                        if (legacyKeys.length) log(`Removed ${legacyKeys.length} legacy enable key(s)`);
+                    })
+                    .catch(err => debug(`Legacy key cleanup failed: ${err}`));
             });
+        }).catch(err => debug(`Legacy flag migration failed: ${err}`));
+    }
+
+    // Kept promise-returning so the existing call sites read unchanged. The
+    // read underneath is synchronous, which also closes the old startup race
+    // where a not-yet-resolved tab id fell back to a global storage key.
+    function isEnabled() {
+        return Promise.resolve(readEnabled());
     }
 
     function toggleEnabled() {
-        isEnabled().then(enabled => {
-            const newState = !enabled;
-            const data = {};
-            data[getStorageKey(STORAGE_KEY_ENABLED)] = newState;
+        const newState = !readEnabled();
+        writeEnabled(newState);
+        log(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'} for this tab`);
 
-            return safeStorageSet(data)
-                .then(() => {
-                    log(`Feeling tracker is now ${newState ? 'enabled' : 'disabled'} for tab ${currentTabId}`);
-                    if (!newState) {
-                        const dialog = document.getElementById('feeling-dialog');
-                        if (dialog) dialog.remove();
-                        stopPauseEnforcer();
-                        lastPlayTimestamp = null;
-                    }
-                    updateStatusButton();
-                })
-                .catch(err => {
-                    error(`Error toggling enabled state: ${err}`);
-                });
-        });
+        if (!newState) {
+            const dialog = document.getElementById('feeling-dialog');
+            if (dialog) dialog.remove();
+            stopPauseEnforcer();
+            lastPlayTimestamp = null;
+        }
+        updateStatusButton();
     }
 
     function getStoredValue(key, defaultValue) {
-        // Only use tab-specific key for the enabled setting, others are global
-        const storageKey = key === STORAGE_KEY_ENABLED ? getStorageKey(key) : key;
-
-        return safeStorageGet(storageKey)
+        return safeStorageGet(key)
             .then(result => {
-                return result[storageKey] !== undefined ? JSON.parse(result[storageKey]) : defaultValue;
+                return result[key] !== undefined ? JSON.parse(result[key]) : defaultValue;
             })
             .catch(err => {
                 error(`Error getting stored value: ${err}`);
@@ -132,11 +217,8 @@ let initializeFeelingTracker = (function() {
 
     // Helper function to set values in browser storage
     function setStoredValue(key, value) {
-        // Only use tab-specific key for the enabled setting, others are global
-        const storageKey = key === STORAGE_KEY_ENABLED ? getStorageKey(key) : key;
-
         let data = {};
-        data[storageKey] = JSON.stringify(value);
+        data[key] = JSON.stringify(value);
         return safeStorageSet(data)
             .catch(err => {
                 error(`Error setting stored value: ${err}`);
@@ -163,6 +245,13 @@ let initializeFeelingTracker = (function() {
         const currentTime = Date.now();
         lastActiveTime = currentTime;
         setStoredValue(STORAGE_KEY_LASTACTIVE, currentTime);
+    }
+
+    // The message listener is installed on every YouTube page, so anything that
+    // touches the video or the accumulator has to ask separately.
+    function isWatchPage() {
+        return window.location.hostname === "www.youtube.com"
+            && window.location.pathname.includes("/watch");
     }
 
     function getLiveVideoElement() {
@@ -461,9 +550,12 @@ let initializeFeelingTracker = (function() {
     // Status button state
     let statusButton = null;
     let statusUpdateInterval = null;
+    // initializeFeelingTracker retries itself until a <video> exists, so
+    // anything that must happen exactly once per page needs a guard.
+    let messageListenerInstalled = false;
 
     function getStatusInfo() {
-        const enabled = statusButton?.dataset.enabled === 'true';
+        const enabled = readEnabled();
         const tracking = !!(videoElement && !videoElement.paused && lastPlayTimestamp && enabled);
         const contextValid = isExtensionContextValid();
 
@@ -486,13 +578,10 @@ let initializeFeelingTracker = (function() {
 
     function updateStatusButton() {
         if (!statusButton) return;
-        isEnabled().then(enabled => {
-            statusButton.dataset.enabled = enabled;
-            const info = getStatusInfo();
-            const dot = document.getElementById("ytft-status-dot");
-            if (dot) dot.style.backgroundColor = info.color;
-            statusButton.title = info.title;
-        });
+        const info = getStatusInfo();
+        const dot = document.getElementById("ytft-status-dot");
+        if (dot) dot.style.backgroundColor = info.color;
+        statusButton.title = info.title;
     }
 
     function createStatusButton() {
@@ -535,6 +624,8 @@ let initializeFeelingTracker = (function() {
                 }
 
                 updateStatusButton();
+                // The retry loop can land here more than once per page.
+                if (statusUpdateInterval) clearInterval(statusUpdateInterval);
                 statusUpdateInterval = setInterval(updateStatusButton, 2000);
             });
         });
@@ -645,9 +736,9 @@ let initializeFeelingTracker = (function() {
         toggleBtn.style.cursor = "pointer";
         toggleBtn.style.fontSize = "18px";
         toggleBtn.addEventListener("click", () => {
+            // toggleEnabled() updates the button itself, synchronously.
             toggleEnabled();
             closeDialog();
-            setTimeout(updateStatusButton, 500);
         });
         panel.appendChild(toggleBtn);
 
@@ -713,8 +804,10 @@ let initializeFeelingTracker = (function() {
             createStatusButton();
         }
 
+        installMessageListener();
+
         // Only run tracking on YouTube watch pages
-        if (window.location.hostname !== "www.youtube.com" || !window.location.pathname.includes("/watch")) {
+        if (!isWatchPage()) {
             return;
         }
 
@@ -832,25 +925,52 @@ let initializeFeelingTracker = (function() {
         document.body.appendChild(backdrop);
     }
 
-        log("installing listener")
-        if (isExtensionContextValid()) {
-            browser.runtime.onMessage.addListener(data => {
-                log("message received", data)
-                switch (data.trigger) {
-                    case "showFeelingTrackerDialog":
-                        showFeelingTrackerDialog({ debug: true });
-                        break;
-                    case "toggleFeelingTracker":
-                        toggleEnabled();
-                        break;
-                    case "showColorTest":
-                        showColorTestDialog();
-                        break;
-                }
-            });
-        } else {
+    // Installed before the non-watch-page early return, and exactly once per
+    // document. It used to sit at the end of this function, which meant only a
+    // tab whose *initial* URL was a /watch page ever got a listener — YouTube
+    // is an SPA, so clicking into a video from the homepage left the tab with a
+    // permanently dead context menu. The retry loop also re-entered this
+    // function, and every extra listener ran toggleEnabled() again on a single
+    // toggle message: harmless while the toggle was async and every copy
+    // computed the same value, but a synchronous toggle flips N times and an
+    // even N is a silent no-op.
+    function installMessageListener() {
+        if (messageListenerInstalled) return;
+        if (!isExtensionContextValid()) {
             debug('Extension context invalid, cannot install message listener');
+            return;
         }
+
+        log("installing listener")
+        browser.runtime.onMessage.addListener(data => {
+            log("message received", data)
+            switch (data.trigger) {
+                // The enable flag lives in this tab's sessionStorage now,
+                // so the background page has to ask us for it.
+                case "getFeelingTrackerState":
+                    return Promise.resolve({ enabled: readEnabled() });
+                case "showFeelingTrackerDialog":
+                    // Off a watch page this would latch videoElement onto a
+                    // hover-preview player, pause-enforce it, and — once the
+                    // hold completes — start the accumulator on a page the
+                    // early return above is meant to keep untracked.
+                    if (!isWatchPage()) {
+                        log('Ignoring dialog request: not a watch page');
+                        break;
+                    }
+                    showFeelingTrackerDialog({ debug: true });
+                    break;
+                case "toggleFeelingTracker":
+                    toggleEnabled();
+                    break;
+                case "showColorTest":
+                    showColorTestDialog();
+                    break;
+            }
+        });
+        // Set after the call, so a throw here leaves a retry able to install.
+        messageListenerInstalled = true;
+    }
     }
 
     return initializeFeelingTracker
