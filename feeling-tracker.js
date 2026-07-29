@@ -74,6 +74,14 @@ let initializeFeelingTracker = (function() {
     let accumulatedPlayTime = 0;
     let lastActiveTime = 0;
     let currentTabId = null;
+    // initializeFeelingTracker is re-entrant — the retry loop and the SPA
+    // watcher both call it again — so anything that attaches a listener or
+    // starts a timer needs to know whether it already ran.
+    let trackingActive = false;
+    let listenedVideoElement = null;
+    let visibilityListenerInstalled = false;
+    let spaObserver = null;
+    let retryTimer = null;
 
     // Get the current tab ID on initialization
     if (isExtensionContextValid()) {
@@ -240,11 +248,60 @@ let initializeFeelingTracker = (function() {
         });
     }
 
+    function onVisibilityChange() {
+        if (document.visibilityState === 'hidden') {
+            // Page is hidden (user switched tabs, etc.)
+            if (lastPlayTimestamp) {
+                const currentTime = Date.now();
+                const additionalTime = currentTime - lastPlayTimestamp;
+                accumulatedPlayTime += additionalTime;
+                setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
+                lastPlayTimestamp = null;
+                log(`Page hidden. Updated accumulated play time: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
+            }
+        } else {
+            // Page is visible again - refresh from storage
+            getStoredValue(STORAGE_KEY_PLAYTIME, 0).then(storedTime => {
+                accumulatedPlayTime = storedTime;
+                log(`Page visible again. Refreshed accumulated play time: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
+            });
+        }
+    }
+
     // Function to update last active time
     function updateLastActiveTime() {
         const currentTime = Date.now();
         lastActiveTime = currentTime;
         setStoredValue(STORAGE_KEY_LASTACTIVE, currentTime);
+    }
+
+    // Content scripts inject once per document load, so a tab that opened on
+    // the homepage, search results or a channel page would take the early
+    // return in initializeFeelingTracker and never track anything, however many
+    // videos were watched in it afterwards — YouTube reaches them by SPA
+    // navigation, not a new document. Watch for the path becoming /watch and
+    // initialize then. youtube.js and overlays.js already do this for their own
+    // features; the raw pathname compare matches youtube.js rather than
+    // duplicating the debounce helper that is private to overlays.js.
+    function watchForSpaNavigation() {
+        // trackingActive is checked as well as spaObserver: once tracking has
+        // started the observer is disconnected and nulled, and a pending retry
+        // re-entering here would otherwise arm a fresh one that can never act.
+        if (spaObserver || trackingActive) return;
+
+        let lastPath = window.location.pathname;
+        spaObserver = new MutationObserver(() => {
+            if (window.location.pathname === lastPath) return;
+            lastPath = window.location.pathname;
+
+            // Already-running trackers survive SPA navigation on their own, so
+            // this only has to catch the first arrival on a watch page.
+            if (isWatchPage() && !trackingActive) {
+                log(`Navigated to ${lastPath}, starting tracker`);
+                initializeFeelingTracker();
+            }
+        });
+        spaObserver.observe(document, { subtree: true, childList: true });
     }
 
     // The message listener is installed on every YouTube page, so anything that
@@ -254,18 +311,43 @@ let initializeFeelingTracker = (function() {
             && window.location.pathname.includes("/watch");
     }
 
+    // A watch page can have several <video> elements mounted at once — the
+    // hover-preview player carried over from a feed, an ad player, a Shorts
+    // player. A bare querySelector('video') takes whichever comes first in
+    // document order, which mid-navigation is frequently not the real one, and
+    // binding to a stray leaves the tracker running against something that
+    // never plays. Ask for the main player specifically and let the caller
+    // retry if it hasn't rendered yet, rather than latching onto a stand-in.
+    function findMainVideo() {
+        return document.querySelector('#movie_player video')
+            || document.querySelector('video.html5-main-video');
+    }
+
     function getLiveVideoElement() {
-        // YouTube is a SPA — the cached videoElement can become stale
-        // or disconnected after navigation. Prefer a fresh query, and
-        // refresh the cache if the current one is no longer in the DOM.
-        if (!videoElement || !videoElement.isConnected) {
-            const fresh = document.querySelector('video');
-            if (fresh) videoElement = fresh;
+        // YouTube is a SPA — the cached videoElement can become stale or
+        // disconnected after navigation, and it can also still be mounted while
+        // no longer being the main player, which isConnected alone won't catch.
+        // The live main player is authoritative whenever there is one.
+        const main = findMainVideo();
+        if (main) {
+            videoElement = main;
+        } else if (videoElement && !videoElement.isConnected) {
+            videoElement = null;
         }
         return videoElement;
     }
 
     async function showFeelingTrackerDialog({ debug: isDebug = false } = {}) {
+        // Guarded here rather than at each caller: the status menu's debug
+        // button is built on every YouTube page and reached this directly.
+        // Completing the dialog runs trackFeeling(), which zeroes the *global*
+        // playtime and watchedVideos keys — so a debug click on the homepage
+        // would wipe a real in-progress session belonging to another tab.
+        if (!isWatchPage()) {
+            log('Ignoring feeling dialog request: not a watch page');
+            return;
+        }
+
         const v = getLiveVideoElement();
         if (v && !v.paused) {
             v.pause();
@@ -385,7 +467,32 @@ let initializeFeelingTracker = (function() {
 
         // Set an interval to periodically check accumulated play time
         checkTimer = setInterval(() => {
-            if (videoElement && !videoElement.paused) {
+            // This timer outlives the watch page that started it. Off one,
+            // stop counting — a stale timestamp would otherwise charge the
+            // whole detour to the next video.
+            //
+            // Deliberate consequence: time played in the miniplayer after you
+            // navigate back to the feed does not count toward the threshold.
+            // Leaving a watch page stops the clock, full stop — chosen over the
+            // alternative of gating on "the main player is playing", which
+            // would count it.
+            if (!isWatchPage()) {
+                lastPlayTimestamp = null;
+                return;
+            }
+
+            // Re-query rather than trusting the cached element: YouTube can
+            // swap the <video> across SPA navigation, and a detached one never
+            // reports playing again, so tracking would silently stop.
+            const video = getLiveVideoElement();
+
+            // Attach before the paused check, not inside it: waiting until the
+            // element is already playing means its own play event has come and
+            // gone, and that handler is what records the video in watchedVideos
+            // and re-syncs the accumulator from storage.
+            if (video) setupVideoListeners();
+
+            if (video && !video.paused) {
                 // First check if the feeling tracker is enabled for this tab
                 isEnabled().then(enabled => {
                     if (!enabled) {
@@ -448,9 +555,17 @@ let initializeFeelingTracker = (function() {
 
     // Handle video play/pause events to track actual playing time
     function setupVideoListeners() {
-        if (!videoElement) return;
+        // Attach once per element. Re-entry with the same <video> would stack
+        // duplicate handlers; a genuinely new element does need its own.
+        if (!videoElement || listenedVideoElement === videoElement) return;
+        listenedVideoElement = videoElement;
 
         videoElement.addEventListener('play', () => {
+            // Handlers outlive the page they were attached on, and the player
+            // keeps playing in the miniplayer after you navigate away. Without
+            // this the homepage itself gets recorded into watchedVideos.
+            if (!isWatchPage()) return;
+
             // First check if the tracker is enabled
             isEnabled().then(enabled => {
                 if (!enabled) {
@@ -587,9 +702,17 @@ let initializeFeelingTracker = (function() {
     function createStatusButton() {
         waitForElementToBeLoaded("#center.ytd-masthead", () => {
             waitForElementToBeLoaded("#avatar-btn", () => {
-                document.querySelectorAll("#ytft-status").forEach(i => i.remove());
+                // Remove the whole previous widget, not just the button: the
+                // dot lives in the container and is positioned against it, so
+                // dropping only #ytft-status left an orphaned container behind
+                // that rendered as a stray dot beside the new one. The button
+                // and dot ids are listed too, to sweep up widgets built before
+                // the container had an id of its own.
+                document.querySelectorAll("#ytft-status-container, #ytft-status, #ytft-status-dot")
+                    .forEach(i => i.remove());
 
                 const container = document.createElement("div");
+                container.id = "ytft-status-container";
                 container.style.display = "inline-block";
                 container.style.position = "relative";
                 container.style.marginRight = "8px";
@@ -805,6 +928,7 @@ let initializeFeelingTracker = (function() {
         }
 
         installMessageListener();
+        watchForSpaNavigation();
 
         // Only run tracking on YouTube watch pages
         if (!isWatchPage()) {
@@ -814,29 +938,18 @@ let initializeFeelingTracker = (function() {
         // Check for session timeout on load
         checkSessionTimeout();
 
-        // Listen for page visibility changes to handle tab switching
-        document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'hidden') {
-                // Page is hidden (user switched tabs, etc.)
-                if (lastPlayTimestamp) {
-                    const currentTime = Date.now();
-                    const additionalTime = currentTime - lastPlayTimestamp;
-                    accumulatedPlayTime += additionalTime;
-                    setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
-                    lastPlayTimestamp = null;
-                    log(`Page hidden. Updated accumulated play time: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
-                }
-            } else {
-                // Page is visible again - refresh from storage
-                getStoredValue(STORAGE_KEY_PLAYTIME, 0).then(storedTime => {
-                    accumulatedPlayTime = storedTime;
-                    log(`Page visible again. Refreshed accumulated play time: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
-                });
-            }
-        });
+        // Listen for page visibility changes to handle tab switching. Attached
+        // once per document — this function re-enters, and every extra copy
+        // would run the accumulate-on-hide branch again.
+        if (!visibilityListenerInstalled) {
+            visibilityListenerInstalled = true;
+            document.addEventListener('visibilitychange', onVisibilityChange);
+        }
 
-        // Find the video element
-        videoElement = document.querySelector('video');
+        // Find the main player. The SPA watcher fires at the start of a
+        // navigation, so this often runs before it has rendered — the retry
+        // below is the normal path there, not an edge case.
+        videoElement = findMainVideo();
 
         if (videoElement) {
             log('Video element found, starting tracker.');
@@ -849,6 +962,19 @@ let initializeFeelingTracker = (function() {
                 setupVideoListeners();
                 startPlayTimeTracking();
 
+                // Set only once tracking is genuinely running, so a failure
+                // above leaves the SPA watcher and the retry loop free to try
+                // again rather than latching a half-started tracker.
+                trackingActive = true;
+
+                // From here the watcher can never act again — stop paying for
+                // a document-wide subtree observer on a page that mutates
+                // constantly.
+                if (spaObserver) {
+                    spaObserver.disconnect();
+                    spaObserver = null;
+                }
+
                 // Set up session timeout check timer
                 if (sessionTimer) {
                     clearInterval(sessionTimer);
@@ -856,9 +982,16 @@ let initializeFeelingTracker = (function() {
                 sessionTimer = setInterval(checkSessionTimeout, 60000); // Check every minute
             });
         } else {
-            // Try again in a second if video not found
+            // Try again in a second if video not found. Kept to a single chain:
+            // the SPA watcher can re-enter while a retry is already pending, and
+            // two chains both re-read the accumulator from storage, so whichever
+            // resolves last discards the seconds the other one had banked.
             log('Video element not found, trying again soon.');
-            setTimeout(initializeFeelingTracker, 1000);
+            if (retryTimer) clearTimeout(retryTimer);
+            retryTimer = setTimeout(() => {
+                retryTimer = null;
+                initializeFeelingTracker();
+            }, 1000);
         }
 
     function showColorTestDialog() {
