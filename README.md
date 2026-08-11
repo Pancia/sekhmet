@@ -53,6 +53,8 @@ This browser extension works on Firefox, Brave, Chrome, and other Chromium-based
 - `overlays.js`: Content overlay functionality
 - `youtube.js`: YouTube-specific functionality
 - `google-it.js`: DuckDuckGo integration
+- `openfront-block.js`: Stops openfront.io at `document_start` and asks the background script to reroute the tab
+- `openfront-blocked.html` / `openfront-blocked.js`: The commitment reminder the tab is rerouted to
 - `index.js`: Main coordinator script
 - `background.js`: Background script for context menus and messaging
 - `manifest.json`: Extension configuration

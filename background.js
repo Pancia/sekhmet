@@ -135,6 +135,16 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse({ tabId: sender.tab.id }); // synchronous reply
             return;
 
+        case "openfrontBlocked":
+            // The content script has already stopped the load; swap the tab
+            // over to the reminder page, which renders as a normal document.
+            if (sender.tab) {
+                browser.tabs.update(sender.tab.id, {
+                    url: browser.runtime.getURL("openfront-blocked.html"),
+                }).catch(err => console.error("YTF: Could not reroute openfront tab", err));
+            }
+            return;
+
         case "saveFile":
             // Fire-and-forget. Relies on the persistent MV2 background page staying
             // alive until the native host replies; would need rework under MV3.

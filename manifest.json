@@ -22,6 +22,12 @@
             "matches": ["*://*.duckduckgo.com/*"],
             "js": ["polyfill.js", "lib.js", "google-it.js"],
             "all_frames": false
+        },
+        {
+            "matches": ["*://openfront.io/*", "*://*.openfront.io/*"],
+            "js": ["polyfill.js", "openfront-block.js"],
+            "run_at": "document_start",
+            "all_frames": true
         }
     ]
 }

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>You committed to stop.</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --ink: #e8e4dc;
+            --dim: #8d8880;
+            --accent: #d9a441;
+            --bg: #14151a;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            background: radial-gradient(ellipse at 50% 0%, #1e2029 0%, var(--bg) 60%);
+            color: var(--ink);
+            font: 16px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6vh 24px;
+            -webkit-font-smoothing: antialiased;
+        }
+        main { max-width: 34rem; width: 100%; }
+        .eyebrow {
+            font-size: .72rem;
+            letter-spacing: .22em;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin: 0 0 1.6rem;
+        }
+        .eyebrow b { color: var(--accent); font-weight: 600; }
+        h1 {
+            font-size: clamp(2rem, 6vw, 3rem);
+            line-height: 1.1;
+            font-weight: 600;
+            letter-spacing: -.02em;
+            margin: 0 0 1.8rem;
+        }
+        ul.reasons {
+            list-style: none;
+            margin: 0 0 2rem;
+            padding: 0 0 0 1.25rem;
+            border-left: 2px solid rgba(217, 164, 65, .35);
+        }
+        ul.reasons li { font-size: 1.15rem; padding: .3rem 0; }
+        p.coda { color: var(--dim); margin: 0 0 2.5rem; max-width: 30rem; }
+        .since { font-variant-numeric: tabular-nums; color: var(--accent); }
+        .actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+        button {
+            font: inherit;
+            font-size: .95rem;
+            padding: .6rem 1.15rem;
+            border-radius: 8px;
+            border: 1px solid rgba(217, 164, 65, .5);
+            background: transparent;
+            color: var(--accent);
+            cursor: pointer;
+            transition: background .15s ease, border-color .15s ease;
+        }
+        button:hover { background: rgba(217, 164, 65, .1); }
+        @media (prefers-reduced-motion: no-preference) {
+            main { animation: rise .5s ease-out both; }
+            @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <p class="eyebrow">openfront.io &middot; <b>blocked</b></p>
+        <h1>You already decided this one.</h1>
+        <ul class="reasons">
+            <li>It isn't worth it anymore.</li>
+            <li>It's too frustrating.</li>
+            <li>It messes you up for the rest of the day.</li>
+        </ul>
+        <p class="coda">
+            Nothing has changed since you made that call &mdash; not the game, not
+            how it leaves you. You're not missing out on a different outcome.
+            <span id="ytf-since"></span>
+        </p>
+        <div class="actions">
+            <button id="ytf-close">Close this tab</button>
+        </div>
+    </main>
+    <script src="polyfill.js"></script>
+    <script src="openfront-blocked.js"></script>
+</body>
+</html>
