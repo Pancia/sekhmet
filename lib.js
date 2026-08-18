@@ -77,6 +77,42 @@ function waitForElementToBeLoaded(selector, callback, elementTest, config) {
 
     // Start the first check
     timeoutId = setTimeout(checkElement, currentWait);
+
+    // There is no iteration cap, so a selector that never validates polls for the life
+    // of the tab. On an SPA that is per navigation, not per page load - callers need a
+    // way to stop the ones belonging to a page they have navigated away from.
+    return function cancelWait() {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+    };
+}
+
+// Focus can sit inside a shadow root, in which case document.activeElement
+// reports the host rather than the focused node. Walk down to the real one.
+function deepActiveElement() {
+    let el = document.activeElement;
+    while (el && el.shadowRoot && el.shadowRoot.activeElement) {
+        el = el.shadowRoot.activeElement;
+    }
+    return el;
+}
+
+// Is this key event aimed at somewhere the user is typing? Any module claiming a
+// global hotkey has to bail out here, or it eats keystrokes meant for the search
+// box or a comment. Checks the event's own target as well as the focused element,
+// because the two disagree often enough to matter.
+function isTypingTarget(event) {
+    const path = event && event.composedPath ? event.composedPath() : null;
+    const candidates = [path && path[0], deepActiveElement()];
+    for (const el of candidates) {
+        if (!el || el.nodeType !== 1) continue;
+        const tag = el.tagName.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+        // The property rather than the attribute: YouTube's comment box is a
+        // nested #contenteditable-root, so the flag has to resolve by inheritance.
+        if (el.isContentEditable) return true;
+    }
+    return false;
 }
 
 // Lightweight in-page toasts. Content scripts share the page's DOM, so
