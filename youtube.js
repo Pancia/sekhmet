@@ -20,8 +20,12 @@ let initializeYoutube = (function() {
 
     function initializeYoutube() {
         document.addEventListener('keydown', (event) => {
-            // Block arrow keys on Shorts pages to prevent navigating to next/prev short
-            if (window.location.host === "www.youtube.com" && window.location.pathname.startsWith('/shorts')) {
+            // Block arrow keys on Shorts pages to prevent navigating to next/prev short.
+            // volume.js normally claims these first from window capture; this still
+            // fires whenever it declines. Skipped while typing so the arrows can
+            // still move the caret in a Shorts comment.
+            if (window.location.host === "www.youtube.com" && window.location.pathname.startsWith('/shorts')
+                && !isTypingTarget(event)) {
                 if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
                     event.preventDefault();
                     event.stopPropagation();
@@ -29,9 +33,10 @@ let initializeYoutube = (function() {
             }
 
             if (window.location.host == "www.youtube.com" && window.location.pathname == "/watch") {
-                const activeElement = document.activeElement;
-                const isInputField = ['input', 'textarea'].includes(activeElement.tagName.toLowerCase());
-                debug(event, activeElement, isInputField)
+                // Not a plain tagName check: YouTube's comment box is contenteditable,
+                // so typing the letter "n" in a comment used to skip the video.
+                const isInputField = isTypingTarget(event);
+                debug(event, document.activeElement, isInputField)
                 if (event.key === 'n' && !event.shiftKey && !isInputField) {
                     document.querySelector(".ytp-next-button").click();
                 }

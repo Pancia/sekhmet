@@ -2,6 +2,7 @@ function init() {
     initializeYTDL();
     initializeOverlays();
     initializeYoutube();
+    initializeVolume();
     setTimeout(() => {
         initializeFeelingTracker();
     }, 2000);
