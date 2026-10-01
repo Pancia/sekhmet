@@ -3,6 +3,7 @@ function init() {
     initializeOverlays();
     initializeYoutube();
     initializeVolume();
+    YTELoop.init();
     setTimeout(() => {
         initializeFeelingTracker();
     }, 2000);

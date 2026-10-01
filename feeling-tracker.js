@@ -720,6 +720,14 @@ let initializeFeelingTracker = (function() {
     // anything that must happen exactly once per page needs a guard.
     let messageListenerInstalled = false;
 
+    // The loop registry lives in loop.js; the compass menu is just where its
+    // switch is surfaced. Returns null when the page has no video to loop, so a
+    // missing loop.js degrades to the row reading "n/a" rather than throwing.
+    function loopState() {
+        if (typeof YTELoop === 'undefined' || !YTELoop) return null;
+        return YTELoop.currentKey() ? YTELoop.isRemembered() : null;
+    }
+
     function getStatusInfo() {
         const enabled = readEnabled();
         const tracking = !!(videoElement && !videoElement.paused && lastPlayTimestamp && enabled);
@@ -859,6 +867,12 @@ let initializeFeelingTracker = (function() {
 
         function getRowData() {
             const info = getStatusInfo();
+            const loop = loopState();
+            const loopRow = loop === null
+                ? { value: "n/a", color: "#333" }
+                : loop
+                    ? { value: "Remembered", color: "#4CAF50" }
+                    : { value: "Off", color: "#333" };
             return [
                 { label: "Extension context", value: info.contextValid ? "Valid" : "Lost", color: info.contextValid ? "#4CAF50" : "#F44336" },
                 { label: "Enabled", value: info.enabled ? "Yes" : "No", color: info.enabled ? "#4CAF50" : "#F44336" },
@@ -866,6 +880,7 @@ let initializeFeelingTracker = (function() {
                 { label: "Video element", value: videoElement ? "Found" : "Not found", color: videoElement ? "#4CAF50" : "#F44336" },
                 { label: "Accumulated time", value: `${Math.round(accumulatedPlayTime / 1000)}s / ${Math.round(checkIntervalMs / 1000)}s`, color: "#333" },
                 { label: "Video grace", value: info.grace, color: info.grace === "Clear" ? "#4CAF50" : "#FFC107" },
+                { label: "Loop", value: loopRow.value, color: loopRow.color },
                 { label: "Tab ID", value: currentTabId ?? "Unknown", color: "#333" },
             ];
         }
@@ -924,6 +939,31 @@ let initializeFeelingTracker = (function() {
             closeDialog();
         });
         panel.appendChild(toggleBtn);
+
+        // Loop button. Deliberately here rather than left to YouTube's right-click
+        // menu: that one lasts as long as the page does, and this is the switch
+        // that is actually remembered.
+        const loopBtn = document.createElement("button");
+        const loopOn = loopState();
+        loopBtn.textContent = loopOn === null
+            ? "No video on this page to loop"
+            : loopOn ? "🔁 Stop looping this video" : "🔁 Loop this video (remembered)";
+        loopBtn.style.display = "block";
+        loopBtn.style.width = "100%";
+        loopBtn.style.padding = "14px";
+        loopBtn.style.marginTop = "10px";
+        loopBtn.style.border = "none";
+        loopBtn.style.borderRadius = "6px";
+        loopBtn.style.backgroundColor = loopOn === null ? "#9E9E9E" : loopOn ? "#F44336" : "#673AB7";
+        loopBtn.style.color = "white";
+        loopBtn.style.cursor = loopOn === null ? "default" : "pointer";
+        loopBtn.style.fontSize = "18px";
+        loopBtn.disabled = loopOn === null;
+        loopBtn.addEventListener("click", () => {
+            YTELoop.toggle();
+            closeDialog();
+        });
+        panel.appendChild(loopBtn);
 
         // Trigger dialog button
         const triggerBtn = document.createElement("button");

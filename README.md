@@ -64,6 +64,7 @@ browser, not in this repo.
 - `ytdl.js`: Video download functionality
 - `feeling-tracker.js`: YouTube watch time tracking and mood prompts
 - `overlays.js`: Content overlay functionality
+- `loop.js`: Per-video loop that survives reloads - toggled with `Shift+L` or from the 🧭 menu, stored permanently in `storage.local` under `sekhmet_loopedVideos` (clear it wholesale with `browser.storage.local.remove('sekhmet_loopedVideos')`, since there is no settings page yet)
 - `youtube.js`: YouTube-specific functionality
 - `google-it.js`: DuckDuckGo integration
 - `openfront-gate.js`: Entry point for openfront.io - starts the overlay engine, which raises a 15s hold-to-play gate over the whole page. Only on the root page (a deeper path is a match already under way), and at most once every 5 minutes - clearing it is recorded in `storage.local` under `sekhmet_clearedGates` alongside the YouTube gates, with the cooldown set per-overlay by `clearedTtlMs`
