@@ -43,6 +43,9 @@ let initializeFeelingTracker = (function() {
 
     const CHECK_INTERVAL_MINUTES = 7.5;
     const SESSION_TIMEOUT_MINUTES = 5;
+    // Grace period at the start of every video: the dialog stays out of the way
+    // until this much of the current video has gone by.
+    const VIDEO_GRACE_MINUTES = 1;
     const PAUSE_ENFORCER_MS = 100;
     const STORAGE_KEY_PLAYTIME = 'sekhmet_accumulatedPlayTime';
     const STORAGE_KEY_LASTACTIVE = 'sekhmet_lastActiveTime';
@@ -67,6 +70,7 @@ let initializeFeelingTracker = (function() {
 
     let checkIntervalMs = CHECK_INTERVAL_MINUTES * 60 * 1000;
     let sessionTimeoutMs = SESSION_TIMEOUT_MINUTES * 60 * 1000;
+    let videoGraceMs = VIDEO_GRACE_MINUTES * 60 * 1000;
     let checkTimer = null;
     let sessionTimer = null;
     let videoElement = null;
@@ -74,6 +78,10 @@ let initializeFeelingTracker = (function() {
     let accumulatedPlayTime = 0;
     let lastActiveTime = 0;
     let currentTabId = null;
+    // Per-video grace clock. Reset whenever the URL points at a different
+    // video; see inVideoGracePeriod().
+    let currentVideoId = null;
+    let currentVideoWatchMs = 0;
     // initializeFeelingTracker is re-entrant — the retry loop and the SPA
     // watcher both call it again — so anything that attaches a listener or
     // starts a timer needs to know whether it already ran.
@@ -337,6 +345,39 @@ let initializeFeelingTracker = (function() {
         return videoElement;
     }
 
+    // Identity of the video being watched, from the URL rather than the
+    // element: YouTube reuses the same <video> across SPA navigation, so the
+    // element alone cannot tell one video from the next. Null off a watch page.
+    function currentVideoIdFromUrl() {
+        if (!isWatchPage()) return null;
+        try {
+            return new URLSearchParams(window.location.search).get('v');
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Nothing interrupts the opening of a video. Two clocks have to clear,
+    // because either alone leaves an obvious hole:
+    //
+    //   - time actually watched on this video, so a video resuming at 45:00 —
+    //     or one seeked deep into straight away — still gets its grace rather
+    //     than being interrupted seconds after it starts;
+    //   - playback position, so rewatching an opening is left alone too.
+    //
+    // The accumulator keeps running underneath: the dialog is deferred, not
+    // cancelled, and fires as soon as the grace period is up.
+    function inVideoGracePeriod(video) {
+        if (currentVideoWatchMs < videoGraceMs) return true;
+        // Position only counts on the way through the first time. A looping video
+        // under a minute long never reaches 60s, so this clause would hold the
+        // prompt off permanently rather than for the opening — a 45-second clip on
+        // repeat would never ask, however many hours it ran.
+        if (video && video.loop) return false;
+        const position = video && video.currentTime;
+        return Number.isFinite(position) && position * 1000 < videoGraceMs;
+    }
+
     async function showFeelingTrackerDialog({ debug: isDebug = false } = {}) {
         // Guarded here rather than at each caller: the status menu's debug
         // button is built on every YouTube page and reached this directly.
@@ -467,6 +508,15 @@ let initializeFeelingTracker = (function() {
 
         // Set an interval to periodically check accumulated play time
         checkTimer = setInterval(() => {
+            // Start the grace clock over as soon as the URL names a different
+            // video — or no video at all, so returning to the feed and picking
+            // something new never inherits the last video's credit.
+            const videoId = currentVideoIdFromUrl();
+            if (videoId !== currentVideoId) {
+                currentVideoId = videoId;
+                currentVideoWatchMs = 0;
+            }
+
             // This timer outlives the watch page that started it. Off one,
             // stop counting — a stale timestamp would otherwise charge the
             // whole detour to the next video.
@@ -506,6 +556,7 @@ let initializeFeelingTracker = (function() {
                     if (lastPlayTimestamp) {
                         const additionalTime = currentTime - lastPlayTimestamp;
                         accumulatedPlayTime += additionalTime;
+                        currentVideoWatchMs += additionalTime;
 
                         // Always update storage whenever the accumulated time changes
                         setStoredValue(STORAGE_KEY_PLAYTIME, accumulatedPlayTime);
@@ -515,7 +566,7 @@ let initializeFeelingTracker = (function() {
                     updateLastActiveTime();
 
                     // Check if we've reached the threshold
-                    if (accumulatedPlayTime >= checkIntervalMs) {
+                    if (accumulatedPlayTime >= checkIntervalMs && !inVideoGracePeriod(video)) {
                         showFeelingTrackerDialog();
                     }
 
@@ -688,7 +739,15 @@ let initializeFeelingTracker = (function() {
             color = '#FFC107';
             title = 'Feeling tracker: enabled (idle)';
         }
-        return { enabled, tracking, contextValid, color, title };
+        // Why the dialog is holding off, for the status panel: "Clear" means
+        // only the accumulated-time threshold stands between you and it.
+        const grace = !isWatchPage()
+            ? "n/a"
+            : inVideoGracePeriod(getLiveVideoElement())
+                ? `Holding ${Math.round(currentVideoWatchMs / 1000)}s / ${Math.round(videoGraceMs / 1000)}s`
+                : "Clear";
+
+        return { enabled, tracking, contextValid, color, title, grace };
     }
 
     function updateStatusButton() {
@@ -806,6 +865,7 @@ let initializeFeelingTracker = (function() {
                 { label: "Tracking", value: info.tracking ? "Active" : "Idle", color: info.tracking ? "#4CAF50" : "#FFC107" },
                 { label: "Video element", value: videoElement ? "Found" : "Not found", color: videoElement ? "#4CAF50" : "#F44336" },
                 { label: "Accumulated time", value: `${Math.round(accumulatedPlayTime / 1000)}s / ${Math.round(checkIntervalMs / 1000)}s`, color: "#333" },
+                { label: "Video grace", value: info.grace, color: info.grace === "Clear" ? "#4CAF50" : "#FFC107" },
                 { label: "Tab ID", value: currentTabId ?? "Unknown", color: "#333" },
             ];
         }
