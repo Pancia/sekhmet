@@ -75,6 +75,23 @@ browser, not in this repo.
 - `background.js`: Background script for context menus and messaging
 - `manifest.json`: Extension configuration
 
+## Tests
+
+Node-only, no dependencies and no `package.json` - run them with `cmds test`, or
+`node test/run.js`. `cmds check` is the cheaper one: it parses every `.js` and
+confirms every file `manifest.json` names actually exists, which is the failure
+that once stopped the extension loading outright.
+
+- `test/harness.js`: browser stubs - storage that can fail, a `<video>` YouTube
+  reuses across navigation, media events that do not bubble, a driveable poller
+- `test/loop.test.js`: one group per bug that was genuinely in `loop.js`
+- `test/gate.test.js`: the overlay gates' cooldown, path and navigation rules,
+  run against function bodies lifted out of `overlays.js` by name rather than
+  copied - so a rename fails loudly instead of testing a stale duplicate
+
+They stub the browser rather than drive one, so they cover decisions, not
+rendering. Anything about how an overlay actually looks still needs the browser.
+
 ## Potential Next Steps
 
 - Add support for other video platforms
