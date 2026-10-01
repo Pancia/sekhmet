@@ -1,5 +1,5 @@
 let initializeFeelingTracker = (function() {
-    const {log, debug, error} = initLogger("YTFT")
+    const {log, debug, error} = initLogger("feeling-tracker")
 
     // Helper to check if extension context is still valid
     function isExtensionContextValid() {
@@ -44,8 +44,8 @@ let initializeFeelingTracker = (function() {
     const CHECK_INTERVAL_MINUTES = 7.5;
     const SESSION_TIMEOUT_MINUTES = 5;
     const PAUSE_ENFORCER_MS = 100;
-    const STORAGE_KEY_PLAYTIME = 'ytf_accumulatedPlayTime';
-    const STORAGE_KEY_LASTACTIVE = 'ytf_lastActiveTime';
+    const STORAGE_KEY_PLAYTIME = 'sekhmet_accumulatedPlayTime';
+    const STORAGE_KEY_LASTACTIVE = 'sekhmet_lastActiveTime';
     // Per-tab enable flag, held in the tab's own sessionStorage rather than in
     // storage.local under a tab-id-derived key.
     //
@@ -62,8 +62,8 @@ let initializeFeelingTracker = (function() {
     // only applies when a session is actually restored. Note that duplicating a
     // tab copies sessionStorage, so a duplicate of a disabled tab starts
     // disabled.
-    const SESSION_KEY_ENABLED = 'ytf_feelingTracker_enabled';
-    const STORAGE_KEY_MIGRATED = 'ytf_legacyEnabledMigrated';
+    const SESSION_KEY_ENABLED = 'sekhmet_feelingTracker_enabled';
+    const STORAGE_KEY_MIGRATED = 'sekhmet_legacyEnabledMigrated';
 
     let checkIntervalMs = CHECK_INTERVAL_MINUTES * 60 * 1000;
     let sessionTimeoutMs = SESSION_TIMEOUT_MINUTES * 60 * 1000;
@@ -145,7 +145,7 @@ let initializeFeelingTracker = (function() {
     // set for all of them, so a tab that loses the race skips its own
     // migration. That only bites during the single upgrade window and degrades
     // to the previous behaviour, which is why it is left alone.
-    const LEGACY_ENABLED_KEY = /^ytf_feelingTracker_enabled_\d+$/;
+    const LEGACY_ENABLED_KEY = /^sekhmet_feelingTracker_enabled_\d+$/;
 
     function migrateLegacyEnabledFlag(tabId) {
         // Cheap single-key check first: get(null) clones the whole of
@@ -694,7 +694,7 @@ let initializeFeelingTracker = (function() {
     function updateStatusButton() {
         if (!statusButton) return;
         const info = getStatusInfo();
-        const dot = document.getElementById("ytft-status-dot");
+        const dot = document.getElementById("sekhmet-ft-status-dot");
         if (dot) dot.style.backgroundColor = info.color;
         statusButton.title = info.title;
     }
@@ -704,22 +704,22 @@ let initializeFeelingTracker = (function() {
             waitForElementToBeLoaded("#avatar-btn", () => {
                 // Remove the whole previous widget, not just the button: the
                 // dot lives in the container and is positioned against it, so
-                // dropping only #ytft-status left an orphaned container behind
+                // dropping only #sekhmet-ft-status left an orphaned container behind
                 // that rendered as a stray dot beside the new one. The button
                 // and dot ids are listed too, to sweep up widgets built before
                 // the container had an id of its own.
-                document.querySelectorAll("#ytft-status-container, #ytft-status, #ytft-status-dot")
+                document.querySelectorAll("#sekhmet-ft-status-container, #sekhmet-ft-status, #sekhmet-ft-status-dot")
                     .forEach(i => i.remove());
 
                 const container = document.createElement("div");
-                container.id = "ytft-status-container";
+                container.id = "sekhmet-ft-status-container";
                 container.style.display = "inline-block";
                 container.style.position = "relative";
                 container.style.marginRight = "8px";
 
                 statusButton = document.createElement("a");
                 statusButton.textContent = "🧭";
-                statusButton.id = "ytft-status";
+                statusButton.id = "sekhmet-ft-status";
                 statusButton.style.fontSize = "32px";
                 statusButton.style.cursor = "pointer";
                 statusButton.style.userSelect = "none";
@@ -727,7 +727,7 @@ let initializeFeelingTracker = (function() {
                 statusButton.addEventListener("click", openStatusMenu);
 
                 const dot = document.createElement("span");
-                dot.id = "ytft-status-dot";
+                dot.id = "sekhmet-ft-status-dot";
                 dot.style.position = "absolute";
                 dot.style.bottom = "2px";
                 dot.style.right = "-2px";
@@ -756,7 +756,7 @@ let initializeFeelingTracker = (function() {
 
     function openStatusMenu() {
         // Remove existing menu if open
-        const existing = document.getElementById('ytft-status-menu-backdrop');
+        const existing = document.getElementById('sekhmet-ft-status-menu-backdrop');
         if (existing) {
             existing._closeDialog?.();
             existing.remove();
@@ -766,7 +766,7 @@ let initializeFeelingTracker = (function() {
         const info = getStatusInfo();
 
         const backdrop = document.createElement("div");
-        backdrop.id = "ytft-status-menu-backdrop";
+        backdrop.id = "sekhmet-ft-status-menu-backdrop";
         backdrop.style.position = "fixed";
         backdrop.style.top = "0";
         backdrop.style.left = "0";
@@ -795,7 +795,7 @@ let initializeFeelingTracker = (function() {
 
         // Status rows container
         const rowsContainer = document.createElement("div");
-        rowsContainer.id = "ytft-status-rows";
+        rowsContainer.id = "sekhmet-ft-status-rows";
         panel.appendChild(rowsContainer);
 
         function getRowData() {

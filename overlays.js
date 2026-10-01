@@ -110,7 +110,7 @@ let initializeOverlays = (function() {
         // be, because :has stops matching the moment that nested overlay is revealed
         // away - which put the blur straight back over the reply just revealed.
         const hidden = selectors.map(sel =>
-            `${sel}:not(.revealed) > *:not(.individual-item-overlay):not(.yte-overlay-host)`
+            `${sel}:not(.revealed) > *:not(.individual-item-overlay):not(.sekhmet-overlay-host)`
         ).join(',\n            ');
 
         const revealed = selectors.map(sel =>
@@ -133,7 +133,7 @@ let initializeOverlays = (function() {
             .individual-item-overlay {
                 filter: none !important;
             }
-        `, `yte-blur-${itemName}`);
+        `, `sekhmet-blur-${itemName}`);
     }
 
     // itemName is a plural collective; the button talks about one of them.
@@ -208,7 +208,7 @@ let initializeOverlays = (function() {
             node = node.parentElement;
         }
         if (node.parentElement === enclosing) {
-            node.classList.add('yte-overlay-host');
+            node.classList.add('sekhmet-overlay-host');
         }
     }
 
@@ -572,11 +572,11 @@ let initializeOverlays = (function() {
         }
 
         // MAIN() re-runs on every SPA navigation; the observers below outlive it.
-        if (container.dataset.yteRowOverlays) {
+        if (container.dataset.sekhmetRowOverlays) {
             log('[DEBUG] Row overlays already wired to this container');
             return;
         }
-        container.dataset.yteRowOverlays = 'true';
+        container.dataset.sekhmetRowOverlays = 'true';
 
         const itemName = config.itemName || 'rows';
         const holdTime = config.holdTime || 3000;
@@ -747,7 +747,7 @@ let initializeOverlays = (function() {
     // storage.local holds one object of video id -> cleared-at, so the answer
     // follows the video rather than the tab. The TTL keeps that from becoming
     // permanent: a video you sat through last month gets to ask once more.
-    const GATE_STORAGE_KEY = 'yte_clearedGates';
+    const GATE_STORAGE_KEY = 'sekhmet_clearedGates';
     const GATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
     // videoId -> cleared-at timestamp. Hydrated from storage below; the in-memory
@@ -1037,7 +1037,7 @@ let initializeOverlays = (function() {
 
         // Apply global styles
         if (siteConfig.globalStyles) {
-            addGlobalStyle(siteConfig.globalStyles, 'yte-global-styles');
+            addGlobalStyle(siteConfig.globalStyles, 'sekhmet-global-styles');
             log('[DEBUG] Applied global styles');
         }
 
@@ -1151,7 +1151,7 @@ let initializeOverlays = (function() {
         .singular-overlay {
             pointer-events: auto !important;
         }
-    `, 'yte-overlay-base');
+    `, 'sekhmet-overlay-base');
 
         log("Added global overlay styles");
 

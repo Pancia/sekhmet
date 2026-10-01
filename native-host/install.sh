@@ -4,7 +4,7 @@ set -euo pipefail
 # Install the native messaging hosts for Brave/Chrome on macOS.
 # Usage: ./install.sh <extension-id>
 #
-# To find your extension ID: brave://extensions → YouTube Enhancer → ID field
+# To find your extension ID: brave://extensions → Sekhmet → ID field
 
 if [ $# -lt 1 ]; then
     echo "Usage: $0 <extension-id>"
@@ -49,13 +49,13 @@ EOF
     done
 }
 
-install_host "com.ytf.feeling_tracker" \
+install_host "com.sekhmet.feeling_tracker" \
     "$SCRIPT_DIR/run_host.sh" \
-    "YouTube Enhancer feeling tracker file writer"
+    "Sekhmet feeling tracker file writer"
 
-install_host "com.ytf.ytdl" \
+install_host "com.sekhmet.ytdl" \
     "$SCRIPT_DIR/run_ytdl_host.sh" \
-    "YouTube Enhancer downloader (spawns ~/dotfiles/bin/ytdl)"
+    "Sekhmet downloader (spawns ~/dotfiles/bin/ytdl)"
 
 # The detached download wrapper isn't a host manifest entry, but must be runnable.
 chmod +x "$SCRIPT_DIR/ytdl_download.sh"

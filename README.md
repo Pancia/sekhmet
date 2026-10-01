@@ -1,6 +1,11 @@
-# YouTube Tools Browser Extension
+# Sekhmet
 
-This browser extension works on Firefox, Brave, Chrome, and other Chromium-based browsers. It combines the functionality of three Greasemonkey scripts:
+Named for the Egyptian lioness goddess whose rampage was ended not by force but by
+interruption: Ra poured out beer dyed red, she drank it and slept, and woke calm.
+The gates here work the same way - not a block, but a pause long enough for the
+reflex to wear off.
+
+This browser extension works on Firefox, Brave, Chrome, and other Chromium-based browsers. Its original three features were ported from Greasemonkey scripts:
 
 1. **Video Downloader**: Adds download buttons for YouTube videos in different formats
 2. **Feeling Tracker**: Tracks YouTube watch time and periodically asks the user how they're feeling

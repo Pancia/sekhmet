@@ -123,8 +123,8 @@ function isTypingTarget(event) {
 //   t.update("Started", { status: "ok" });   // resets the auto-dismiss timer
 //   t.dismiss();
 function showToast(message, options) {
-    const CONTAINER_ID = "ytf-toast-container";
-    const STYLE_ID = "ytf-toast-style";
+    const CONTAINER_ID = "sekhmet-toast-container";
+    const STYLE_ID = "sekhmet-toast-style";
     const MAX_VISIBLE = 5;
     const STATUSES = {
         pending: { accent: "#3ea6ff", icon: null },   // null => spinner
@@ -139,7 +139,7 @@ function showToast(message, options) {
         if (document.getElementById(STYLE_ID)) return;
         const style = document.createElement("style");
         style.id = STYLE_ID;
-        style.textContent = "@keyframes ytf-toast-spin { to { transform: rotate(360deg); } }";
+        style.textContent = "@keyframes sekhmet-toast-spin { to { transform: rotate(360deg); } }";
         (document.head || document.documentElement).appendChild(style);
     }
 
@@ -253,7 +253,7 @@ function showToast(message, options) {
             borderRadius: "50%",
             border: "2px solid rgba(255, 255, 255, 0.25)",
             borderTopColor: spec.accent,
-            animation: "ytf-toast-spin 0.7s linear infinite"
+            animation: "sekhmet-toast-spin 0.7s linear infinite"
         });
         iconSlot.appendChild(spinner);
     }

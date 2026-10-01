@@ -1,21 +1,21 @@
 function onCreated() {
     if (browser.runtime.lastError) {
-        console.error(`YTF: Error: ${browser.runtime.lastError}`);
+        console.error(`Sekhmet: Error: ${browser.runtime.lastError}`);
     } else {
-        console.log("YTF: Item created successfully");
+        console.log("Sekhmet: Item created successfully");
     }
 }
 
-console.log("YTF: create menu", browser.contextMenus)
+console.log("Sekhmet: create menu", browser.contextMenus)
 
 browser.contextMenus.create({
-    id: "ytf-is-enabled",
+    id: "sekhmet-is-enabled",
     title: "Toggle Feeling Tracker",
     contexts: ["all"],
 }, onCreated);
 
 browser.contextMenus.create({
-    id: "ytf-debug-separator",
+    id: "sekhmet-debug-separator",
     type: "separator",
     contexts: ["all"],
 }, onCreated);
@@ -41,18 +41,18 @@ function getCurrentTab() {
 // unhandled rejection in the background console on each click.
 function sendToTab(tabId, trigger) {
     return browser.tabs.sendMessage(tabId, { trigger })
-        .catch(err => console.log(`YTF: Could not send ${trigger} to tab ${tabId}`, err));
+        .catch(err => console.log(`Sekhmet: Could not send ${trigger} to tab ${tabId}`, err));
 }
 
 async function showFeelingTracker() {
-    console.log("YTF: showFeelingTracker")
+    console.log("Sekhmet: showFeelingTracker")
     const tabInfo = await getCurrentTab();
     const [{ id: tabId }] = tabInfo;
     sendToTab(tabId, 'showFeelingTrackerDialog');
 }
 
 async function toggleFeelingTracker() {
-    console.log("YTF: toggleFeelingTracker")
+    console.log("Sekhmet: toggleFeelingTracker")
     const tabInfo = await getCurrentTab();
     const [{ id: tabId }] = tabInfo;
     sendToTab(tabId, 'toggleFeelingTracker');
@@ -71,7 +71,7 @@ async function updateMenuStatus() {
         // round trip entirely off YouTube rather than messaging a tab with no
         // content script and logging the rejection each time.
         if (!url || !/^https?:\/\/([^/]*\.)?youtube\.com\//.test(url)) {
-            return browser.contextMenus.update("ytf-is-enabled", generic);
+            return browser.contextMenus.update("sekhmet-is-enabled", generic);
         }
 
         const response = await browser.tabs.sendMessage(tabId, { trigger: 'getFeelingTrackerState' });
@@ -79,16 +79,16 @@ async function updateMenuStatus() {
         // undefined, so check for the boolean instead of treating "not false"
         // as enabled — otherwise a tab with no tracker reports "✅ Enabled".
         if (!response || typeof response.enabled !== 'boolean') {
-            return browser.contextMenus.update("ytf-is-enabled", generic);
+            return browser.contextMenus.update("sekhmet-is-enabled", generic);
         }
 
-        return browser.contextMenus.update("ytf-is-enabled", {
+        return browser.contextMenus.update("sekhmet-is-enabled", {
             title: `Feeling Tracker: ${response.enabled ? "✅ Enabled" : "❌ Disabled"} (click to toggle)`,
         });
     } catch (err) {
         // No content script in this tab yet, or it is discarded.
-        console.log("YTF: Could not update menu status", err);
-        return browser.contextMenus.update("ytf-is-enabled", generic);
+        console.log("Sekhmet: Could not update menu status", err);
+        return browser.contextMenus.update("sekhmet-is-enabled", generic);
     }
 }
 
@@ -99,12 +99,12 @@ if (browser.contextMenus.onShown) {
         // so refresh() can't race ahead of the title it is meant to show.
         updateMenuStatus()
             .then(() => browser.contextMenus.refresh())
-            .catch(err => console.log("YTF: Could not refresh menu", err));
+            .catch(err => console.log("Sekhmet: Could not refresh menu", err));
     });
 }
 
 browser.contextMenus.onClicked.addListener((info, tab) => {
-    console.log("YTF: menu listener")
+    console.log("Sekhmet: menu listener")
     switch (info.menuItemId) {
         case "feeling-tracker":
             showFeelingTracker();
@@ -112,14 +112,14 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
         case "color-test":
             getCurrentTab().then(([{ id: tabId }]) => sendToTab(tabId, 'showColorTest'));
             break;
-        case "ytf-is-enabled":
+        case "sekhmet-is-enabled":
             toggleFeelingTracker();
             // Update menu title after toggle. updateMenuStatus returns the
             // contextMenus.update promise rather than awaiting it, so its own
             // try/catch doesn't cover a rejecting update — this call site needs
             // its own catch or that surfaces as an unhandled rejection.
             setTimeout(() => {
-                updateMenuStatus().catch(err => console.log("YTF: Could not update menu status", err));
+                updateMenuStatus().catch(err => console.log("Sekhmet: Could not update menu status", err));
             }, 500);
             break;
     }
@@ -131,7 +131,7 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
 browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
     switch (request.action) {
         case "getTabId":
-            console.log("YTF: Tab ID requested", sender.tab.id);
+            console.log("Sekhmet: Tab ID requested", sender.tab.id);
             sendResponse({ tabId: sender.tab.id }); // synchronous reply
             return;
 
@@ -141,7 +141,7 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (sender.tab) {
                 browser.tabs.update(sender.tab.id, {
                     url: browser.runtime.getURL("openfront-blocked.html"),
-                }).catch(err => console.error("YTF: Could not reroute openfront tab", err));
+                }).catch(err => console.error("Sekhmet: Could not reroute openfront tab", err));
             }
             return;
 
@@ -149,26 +149,26 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // Fire-and-forget. Relies on the persistent MV2 background page staying
             // alive until the native host replies; would need rework under MV3.
             browser.runtime.sendNativeMessage(
-                "com.ytf.feeling_tracker",
+                "com.sekhmet.feeling_tracker",
                 JSON.parse(request.content)
             ).then(response => {
-                console.log("YTF: Native host response", response);
+                console.log("Sekhmet: Native host response", response);
             }).catch(err => {
-                console.error("YTF: Native messaging failed", err);
+                console.error("Sekhmet: Native messaging failed", err);
             });
             return;
 
         case "ytdlDownload":
-            browser.runtime.sendNativeMessage("com.ytf.ytdl", {
+            browser.runtime.sendNativeMessage("com.sekhmet.ytdl", {
                 id: request.id,
                 videoType: request.videoType,
                 downloadType: request.downloadType,
                 quality: request.quality,
             }).then(response => {
-                console.log("YTF: ytdl host response", response);
+                console.log("Sekhmet: ytdl host response", response);
                 sendResponse(response);
             }).catch(err => {
-                console.error("YTF: ytdl native messaging failed", err);
+                console.error("Sekhmet: ytdl native messaging failed", err);
                 sendResponse({ ok: false, error: String(err) });
             });
             return true; // keep the channel open for the async sendResponse

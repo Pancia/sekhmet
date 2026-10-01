@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native messaging host for the YouTube Enhancer downloader.
+"""Native messaging host for the Sekhmet downloader.
 
 Receives a single JSON message from the extension describing a download and
 spawns ~/dotfiles/bin/ytdl (via ytdl_download.sh) as a DETACHED background
@@ -26,7 +26,7 @@ VALID_QUALITIES = {"regular", "best"}
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DOWNLOAD_WRAPPER = str(SCRIPT_DIR / "ytdl_download.sh")
-LOG_DIR = Path.home() / ".local" / "share" / "youtube-enhancer" / "logs"
+LOG_DIR = Path.home() / ".local" / "share" / "sekhmet" / "logs"
 
 # The detached download needs fish, yt-dlp, ffmpeg, whisper-cli (all Homebrew)
 # and trash (~/dotfiles/bin). Build a minimal but sufficient PATH; HOME is set so

@@ -1,8 +1,9 @@
 {
     "manifest_version": 2,
-    "name": "YouTube Enhancer",
+    "name": "Sekhmet",
     "description": "Enhances YouTube with download links, feeling tracker, and content overlays",
     "version": "1.0",
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvIJDcmhy/AetmNtRb6R0jnxlg4nlYayn12bsRzQJzBnjZq+99bUTH0JILWOqRKjgCN1lmGfXL0NLB5miWYqHuIR0eEZdGyLMMTxFp+0N2UZfZ55Ju9yEt76haJ46qbj5FPHp26k8RRNxTA6KVJDWf9Ui0iz4IpaC1O5HrGMZa1FNlOWuHSG40Y1NBkZu4r82TtDzNDXyynwOrjkj9hwP+E3of+nafTzxnljuOdacr0sR828iOHqmhNaKFtniSAwaKz+hGJ2WDX9lybqLlb3jlogm2m1UQfleK03O3YnY/SgRQtm1C5cVhuAUB6xsxTgyhEbw7f5DOCtUHhBf2NHA1wIDAQAB",
     "browser_specific_settings": {
         "gecko": {
             "strict_min_version": "54.0a1"

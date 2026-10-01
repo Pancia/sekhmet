@@ -68,11 +68,11 @@ let initializeVolume = (function() {
                 return null;
             }
         }
-        const volume = root.getAttribute('data-yte-vol');
+        const volume = root.getAttribute('data-sekhmet-vol');
         if (volume === null) return null;
         return {
             volume: Number(volume),
-            muted: root.getAttribute('data-yte-muted') === '1'
+            muted: root.getAttribute('data-sekhmet-muted') === '1'
         };
     }
 
@@ -88,7 +88,7 @@ let initializeVolume = (function() {
             }
             return;
         }
-        root.dispatchEvent(new CustomEvent('yte-volume-cmd', {
+        root.dispatchEvent(new CustomEvent('sekhmet-volume-cmd', {
             bubbles: true,
             detail: JSON.stringify({ volume: volume, unmute: !!unmute })
         }));
@@ -275,7 +275,7 @@ let initializeVolume = (function() {
 
         // Our own modals.
         if (document.getElementById('feeling-dialog')) return;
-        if (document.getElementById('ytft-status-menu-backdrop')) return;
+        if (document.getElementById('sekhmet-ft-status-menu-backdrop')) return;
 
         if (isTypingTarget(event)) return;
         const active = deepActiveElement();

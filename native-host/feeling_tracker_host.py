@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Native messaging host for the YouTube Enhancer feeling tracker.
+"""Native messaging host for the Sekhmet feeling tracker.
 
 Receives JSON messages from the extension and appends them as lines
-to a JSONL file. Location controlled by YTF_FEELING_TRACKER_FILE env var,
-defaults to ~/.local/share/youtube-enhancer/feeling-tracker.jsonl
+to a JSONL file. Location controlled by SEKHMET_FEELING_TRACKER_FILE env var,
+defaults to ~/.local/share/sekhmet/feeling-tracker.jsonl
 """
 
 import json
@@ -12,8 +12,8 @@ import struct
 import sys
 from pathlib import Path
 
-DEFAULT_PATH = Path.home() / ".local" / "share" / "youtube-enhancer" / "feeling-tracker.jsonl"
-OUTPUT_FILE = Path(os.environ.get("YTF_FEELING_TRACKER_FILE", str(DEFAULT_PATH)))
+DEFAULT_PATH = Path.home() / ".local" / "share" / "sekhmet" / "feeling-tracker.jsonl"
+OUTPUT_FILE = Path(os.environ.get("SEKHMET_FEELING_TRACKER_FILE", str(DEFAULT_PATH)))
 
 
 def read_message():

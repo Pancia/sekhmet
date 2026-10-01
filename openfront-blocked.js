@@ -4,7 +4,7 @@
     const prefix = "[YT+] [openfront]:";
     const SINCE_KEY = "openfrontBlockedSince";
 
-    document.getElementById("ytf-close").addEventListener("click", () => {
+    document.getElementById("sekhmet-close").addEventListener("click", () => {
         // window.close() is ignored for tabs the page didn't open, so remove
         // the tab by id instead.
         browser.tabs.getCurrent()
@@ -26,7 +26,7 @@
         );
         if (days < 1) return;
 
-        const el = document.getElementById("ytf-since");
+        const el = document.getElementById("sekhmet-since");
         el.textContent = " You've held this for ";
         const count = document.createElement("span");
         count.className = "since";

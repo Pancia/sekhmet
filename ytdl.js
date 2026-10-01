@@ -182,7 +182,7 @@ function initializeYTDL() {
                 const t = showToast("Sending 🎵 Music…", { status: "pending", timeout: 0 });
                 setTimeout(() => t.update("Failed to start 🎵 Music", {
                     status: "error",
-                    detail: "Error: No such native application com.ytf.ytdl",
+                    detail: "Error: No such native application com.sekhmet.ytdl",
                     timeout: 10000,
                 }), 1200);
             },

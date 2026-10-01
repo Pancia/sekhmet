@@ -13,9 +13,9 @@
 // volume ladder is written in.
 //
 // Protocol, both directions anchored on the player element itself:
-//   content -> page   CustomEvent 'yte-volume-cmd', detail is a JSON *string*
+//   content -> page   CustomEvent 'sekhmet-volume-cmd', detail is a JSON *string*
 //                     (object payloads do not survive the world boundary intact)
-//   page -> content   data-yte-vol / data-yte-muted attributes
+//   page -> content   data-sekhmet-vol / data-sekhmet-muted attributes
 //
 // Reads go through the attributes so the keydown handler never has to await a
 // round trip. Dispatch is synchronous, so a read taken straight after a write
@@ -50,16 +50,16 @@
             const muted = (typeof api.isMuted === 'function' && api.isMuted()) ? '1' : '0';
             // Only write on an actual change: attribute churn wakes up every
             // MutationObserver on the page, YouTube's included.
-            if (el.getAttribute('data-yte-vol') !== volume) {
-                el.setAttribute('data-yte-vol', volume);
+            if (el.getAttribute('data-sekhmet-vol') !== volume) {
+                el.setAttribute('data-sekhmet-vol', volume);
             }
-            if (el.getAttribute('data-yte-muted') !== muted) {
-                el.setAttribute('data-yte-muted', muted);
+            if (el.getAttribute('data-sekhmet-muted') !== muted) {
+                el.setAttribute('data-sekhmet-muted', muted);
             }
         }
     }
 
-    document.addEventListener('yte-volume-cmd', function(event) {
+    document.addEventListener('sekhmet-volume-cmd', function(event) {
         const api = apiOf(event.target);
         if (!api) return;
 
