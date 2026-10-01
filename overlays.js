@@ -264,6 +264,35 @@ let initializeOverlays = (function() {
         }
     }
 
+    // Like waitForElementToBeLoaded, but driven by DOM changes instead of a backing-off
+    // poll. That poll is right for things that load with the page and wrong for
+    // comments, which only load when you scroll down to them - by then it has backed
+    // off to 5s, so the first batch sat blurred with no overlay for seconds. Here the
+    // container is caught within one throttle window of it arriving. The page-wide
+    // observer is cheap - its callback only schedules, the check runs at most every
+    // 100ms - and disconnects the moment the container turns up.
+    function watchForContainer(selector, validation, callback) {
+        let done = false;
+        const check = () => {
+            if (done) { return; }
+            // Cheapest test first. Some of these never match - most watch pages
+            // have no Shorts shelf, some videos have comments off - and this runs
+            // for the whole visit, so the miss has to cost a querySelector and no
+            // more: validation before offsetWidth, which forces a layout.
+            const el = document.querySelector(selector);
+            if (!el) { return; }
+            if (validation && !validation(el)) { return; }
+            if (el.offsetWidth <= 0 || el.offsetHeight <= 0) { return; }
+            done = true;
+            observer.disconnect();
+            callback(el);
+        };
+        const observer = new MutationObserver(throttle(100, check));
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        check();
+        return () => { done = true; observer.disconnect(); };
+    }
+
     function addIndividualOverlays(containerSelector, itemSelector, config) {
         log(`[DEBUG] addIndividualOverlays called with:`, containerSelector, itemSelector, config);
 
@@ -1069,15 +1098,13 @@ let initializeOverlays = (function() {
                     if (overlayConfig.waitFor) {
                         log(`[DEBUG] Waiting for: ${overlayConfig.selector}`);
                         // Wait for container to have matching items
-                        const validation = (container) => {
-                            const itemCount = container.querySelectorAll(overlayConfig.itemSelector).length;
-                            log(`[DEBUG] Validation check - found ${itemCount} ${overlayConfig.itemSelector} in container`);
-                            return itemCount > 0;
-                        };
-                        onTeardown(waitForElementToBeLoaded(overlayConfig.selector, () => {
+                        // No logging here: it runs on every DOM change until it matches.
+                        const validation = (container) =>
+                            container.querySelector(overlayConfig.itemSelector) !== null;
+                        onTeardown(watchForContainer(overlayConfig.selector, validation, () => {
                             log(`[DEBUG] Element loaded with items, calling addIndividualOverlays`);
                             addIndividualOverlays(overlayConfig.selector, overlayConfig.itemSelector, overlayConfig);
-                        }, validation, POLL_CONFIG));
+                        }));
                     } else {
                         log(`[DEBUG] No wait, calling addIndividualOverlays immediately`);
                         addIndividualOverlays(overlayConfig.selector, overlayConfig.itemSelector, overlayConfig);
