@@ -44,6 +44,12 @@
             "js": ["polyfill.js", "lib.js", "overlays.js", "openfront-gate.js"],
             "run_at": "document_end",
             "all_frames": false
+        },
+        {
+            "matches": ["*://watch.thechosen.tv/*"],
+            "js": ["polyfill.js", "lib.js", "thechosen.js"],
+            "run_at": "document_end",
+            "all_frames": false
         }
     ],
     "web_accessible_resources": ["player-bridge.js", "wallpaper.html"],

@@ -70,6 +70,7 @@ browser, not in this repo.
 - `openfront-gate.js`: Entry point for openfront.io - starts the overlay engine, which raises a 15s hold-to-play gate over the whole page. Only on the root page (a deeper path is a match already under way), and at most once every 5 minutes - clearing it is recorded in `storage.local` under `sekhmet_clearedGates` alongside the YouTube gates, with the cooldown set per-overlay by `clearedTtlMs`
 - `openfront-block.js`: **Disabled** (not in the manifest). The previous approach: stopped openfront.io at `document_start` and asked the background script to reroute the tab
 - `openfront-blocked.html` / `openfront-blocked.js`: The commitment reminder the block rerouted to - also unused while the block is off
+- `thechosen.js`: watch.thechosen.tv - moves the episode sidebar ("Next Episode" and the rest of the column) from beside the player to below it. Finds the two-column layout by shape rather than by class name (the outermost flex row above the `<video>` that has a column the player is not in), tags it, and lets two CSS rules do the stacking - no DOM is reparented, because React owns those nodes. No-ops where the site's own breakpoint has already stacked the layout
 - `index.js`: Main coordinator script
 - `background.js`: Background script for context menus and messaging
 - `manifest.json`: Extension configuration
