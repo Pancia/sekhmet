@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sekhmet wallpapers</title>
+<style>
+    :root {
+        --bg: #111014;
+        --panel: #1b1a20;
+        --text: #eee9df;
+        --muted: #9a948a;
+        --gold: #f5c94a;
+        --gold-deep: #d99a1e;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        padding: 40px 16px 64px;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 880px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; font-size: 26px; font-weight: 600; letter-spacing: 0.02em; color: var(--gold); }
+    .lede { margin: 0 0 32px; color: var(--muted); }
+    section {
+        background: var(--panel);
+        border: 1px solid rgba(245, 201, 74, 0.18);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    h2 { margin: 0; font-size: 17px; font-weight: 600; }
+    .count { color: var(--muted); font-size: 13px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    .tile {
+        position: relative;
+        aspect-ratio: 16 / 10;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #000 center / cover no-repeat;
+    }
+    .tile button {
+        position: absolute; top: 6px; right: 6px;
+        width: 28px; height: 28px;
+        border: 0; border-radius: 50%;
+        background: rgba(0, 0, 0, 0.65); color: #fff;
+        font-size: 16px; line-height: 28px; cursor: pointer;
+        opacity: 0; transition: opacity 120ms;
+    }
+    .tile:hover button, .tile button:focus-visible { opacity: 1; }
+    .add {
+        display: flex; align-items: center; justify-content: center;
+        aspect-ratio: 16 / 10;
+        border: 2px dashed rgba(245, 201, 74, 0.45);
+        border-radius: 8px;
+        color: var(--gold);
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 120ms, border-color 120ms;
+    }
+    .add:hover, .add.dragging { background: rgba(245, 201, 74, 0.08); border-color: var(--gold); }
+    .add input { display: none; }
+    .empty { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+    .status { min-height: 1.5em; color: var(--muted); font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+    <h1>Sekhmet</h1>
+    <p class="lede">Pictures to show behind each gate. One is picked at random every time a gate goes up; with none, the gate is plain black. They are stored in this browser only.</p>
+    <div id="slots"></div>
+</main>
+<script src="polyfill.js"></script>
+<script src="wallpapers.js"></script>
+<script src="options.js"></script>
+</body>
+</html>

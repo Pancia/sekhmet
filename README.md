@@ -11,6 +11,14 @@ This browser extension works on Firefox, Brave, Chrome, and other Chromium-based
 2. **Feeling Tracker**: Tracks YouTube watch time and periodically asks the user how they're feeling
 3. **Content Overlays**: Creates overlays that hide YouTube content until users intentionally interact with them
 
+## Gate wallpapers
+
+The gates (the YouTube player, openfront.io) can show your own pictures instead of
+plain black. Open the extension's options - right-click any page, **Gate
+wallpapers…**, or the Details page on `brave://extensions` - and add images per
+gate. One is picked at random each time a gate goes up. They are stored in the
+browser, not in this repo.
+
 ## Installation
 
 ### Firefox

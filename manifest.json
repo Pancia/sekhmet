@@ -4,6 +4,21 @@
     "description": "Gates the feeds that eat attention - YouTube, openfront.io - behind a hold, plus downloads and a feeling tracker",
     "version": "1.0",
     "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvIJDcmhy/AetmNtRb6R0jnxlg4nlYayn12bsRzQJzBnjZq+99bUTH0JILWOqRKjgCN1lmGfXL0NLB5miWYqHuIR0eEZdGyLMMTxFp+0N2UZfZ55Ju9yEt76haJ46qbj5FPHp26k8RRNxTA6KVJDWf9Ui0iz4IpaC1O5HrGMZa1FNlOWuHSG40Y1NBkZu4r82TtDzNDXyynwOrjkj9hwP+E3of+nafTzxnljuOdacr0sR828iOHqmhNaKFtniSAwaKz+hGJ2WDX9lybqLlb3jlogm2m1UQfleK03O3YnY/SgRQtm1C5cVhuAUB6xsxTgyhEbw7f5DOCtUHhBf2NHA1wIDAQAB",
+    "icons": {
+        "16": "icons/icon-16.png",
+        "32": "icons/icon-32.png",
+        "48": "icons/icon-48.png",
+        "128": "icons/icon-128.png"
+    },
+    "browser_action": {
+        "default_icon": {
+            "16": "icons/icon-16.png",
+            "32": "icons/icon-32.png",
+            "48": "icons/icon-48.png",
+            "128": "icons/icon-128.png"
+        },
+        "default_title": "Sekhmet - gate wallpapers"
+    },
     "browser_specific_settings": {
         "gecko": {
             "strict_min_version": "54.0a1"
@@ -12,7 +27,7 @@
     "background": {
         "scripts": ["polyfill.js", "background.js"]
     },
-    "permissions": ["storage", "tabs", "contextMenus", "nativeMessaging"],
+    "permissions": ["storage", "unlimitedStorage", "tabs", "contextMenus", "nativeMessaging"],
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],
@@ -31,5 +46,9 @@
             "all_frames": false
         }
     ],
-    "web_accessible_resources": ["player-bridge.js"]
+    "web_accessible_resources": ["player-bridge.js", "wallpaper.html"],
+    "options_ui": {
+        "page": "options.html",
+        "open_in_tab": true
+    }
 }

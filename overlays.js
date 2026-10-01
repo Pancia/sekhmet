@@ -30,6 +30,8 @@ let initializeOverlays = (function() {
                 // cooldown it is a fresh approach and worth the full 15s again.
                 rememberCleared: true,
                 clearedTtlMs: 5 * 60 * 1000,
+                // Pictures come from the options page, per user; see wallpapers.js.
+                wallpaper: "openfront",
                 holdTime: 15000
             }
         ]
@@ -66,6 +68,8 @@ let initializeOverlays = (function() {
                     pathPattern: /\/(watch|live)/,
                     selector: "#movie_player",
                     singular: true,
+                    // Pictures come from the options page, per user; see wallpapers.js.
+                    wallpaper: "youtube",
                     // 10s, the same hold the feeling tracker asks for.
                     holdTime: 10000,
                     pauseWhileCovered: true,
@@ -927,6 +931,33 @@ let initializeOverlays = (function() {
         }
     });
 
+    // The user's wallpaper for this gate, framed in from an extension page - see
+    // wallpaper.html for why it is a frame. It sits under the ring and takes no
+    // pointer events, so every click still lands on the gate. With no wallpapers
+    // added the frame stays transparent and the gate's own near-black shows.
+    function createWallpaperFrame(slot) {
+        let src;
+        // The pick is made here, once, and travels in the URL: the frame reloads
+        // whenever the gate is re-attached, and would otherwise pick again.
+        const seed = Math.random().toFixed(6);
+        try { src = browser.runtime.getURL(`wallpaper.html?slot=${encodeURIComponent(slot)}&seed=${seed}`); } catch (e) { return null; }
+        if (!src) { return null; }
+        const frame = document.createElement('iframe');
+        frame.src = src;
+        frame.setAttribute('aria-hidden', 'true');
+        frame.tabIndex = -1;
+        frame.style.cssText = `
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            background: transparent;
+            pointer-events: none;
+        `;
+        return frame;
+    }
+
     // The gate's only control: a gold ring, nothing until you click. It appears
     // under the pointer rather than at a fixed spot, so the image is left whole
     // until you choose where to put it. Stroked, never filled, so the picture
@@ -1116,6 +1147,9 @@ let initializeOverlays = (function() {
             user-select: none;
             -webkit-user-select: none;
         `;
+
+        const wallpaper = config.wallpaper && createWallpaperFrame(config.wallpaper);
+        if (wallpaper) { overlay.appendChild(wallpaper); }
 
         const ring = createHoldRing();
         overlay.appendChild(ring.element);

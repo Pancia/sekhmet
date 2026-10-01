@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- The gate ring, part filled, with a small sun at its centre. -->
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.35" stop-color="#f5c94a"/>
+      <stop offset="0.7" stop-color="#d99a1e"/>
+      <stop offset="1" stop-color="#a8660c"/>
+    </linearGradient>
+    <radialGradient id="bg" cx="0.5" cy="0.4" r="0.7">
+      <stop offset="0" stop-color="#2a2320"/>
+      <stop offset="1" stop-color="#121014"/>
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <circle cx="64" cy="64" r="40" fill="none" stroke="rgba(255,220,140,0.22)" stroke-width="12"/>
+  <circle cx="64" cy="64" r="40" fill="none" stroke="url(#gold)" stroke-width="12" stroke-linecap="round"
+          stroke-dasharray="251.3" stroke-dashoffset="62.8" transform="rotate(-90 64 64)"/>
+  <circle cx="64" cy="64" r="14" fill="url(#gold)"/>
+</svg>

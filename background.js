@@ -15,6 +15,12 @@ browser.contextMenus.create({
 }, onCreated);
 
 browser.contextMenus.create({
+    id: "sekhmet-wallpapers",
+    title: "Gate wallpapers…",
+    contexts: ["all"],
+}, onCreated);
+
+browser.contextMenus.create({
     id: "sekhmet-debug-separator",
     type: "separator",
     contexts: ["all"],
@@ -103,11 +109,17 @@ if (browser.contextMenus.onShown) {
     });
 }
 
+// The toolbar button has nothing else to do, so it opens the wallpapers page.
+browser.browserAction.onClicked.addListener(() => browser.runtime.openOptionsPage());
+
 browser.contextMenus.onClicked.addListener((info, tab) => {
     console.log("Sekhmet: menu listener")
     switch (info.menuItemId) {
         case "feeling-tracker":
             showFeelingTracker();
+            break;
+        case "sekhmet-wallpapers":
+            browser.runtime.openOptionsPage();
             break;
         case "color-test":
             getCurrentTab().then(([{ id: tabId }]) => sendToTab(tabId, 'showColorTest'));
