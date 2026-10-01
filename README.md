@@ -58,8 +58,9 @@ This browser extension works on Firefox, Brave, Chrome, and other Chromium-based
 - `overlays.js`: Content overlay functionality
 - `youtube.js`: YouTube-specific functionality
 - `google-it.js`: DuckDuckGo integration
-- `openfront-block.js`: Stops openfront.io at `document_start` and asks the background script to reroute the tab
-- `openfront-blocked.html` / `openfront-blocked.js`: The commitment reminder the tab is rerouted to
+- `openfront-gate.js`: Entry point for openfront.io - starts the overlay engine, which raises a 15s hold-to-play gate over the whole page. Only on the root page (a deeper path is a match already under way), and at most once every 5 minutes - clearing it is recorded in `storage.local` under `sekhmet_clearedGates` alongside the YouTube gates, with the cooldown set per-overlay by `clearedTtlMs`
+- `openfront-block.js`: **Disabled** (not in the manifest). The previous approach: stopped openfront.io at `document_start` and asked the background script to reroute the tab
+- `openfront-blocked.html` / `openfront-blocked.js`: The commitment reminder the block rerouted to - also unused while the block is off
 - `index.js`: Main coordinator script
 - `background.js`: Background script for context menus and messaging
 - `manifest.json`: Extension configuration

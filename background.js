@@ -136,8 +136,10 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return;
 
         case "openfrontBlocked":
-            // The content script has already stopped the load; swap the tab
-            // over to the reminder page, which renders as a normal document.
+            // Unreachable while openfront-block.js is out of the manifest; see
+            // the note at the top of that file. The content script has already
+            // stopped the load; swap the tab over to the reminder page, which
+            // renders as a normal document.
             if (sender.tab) {
                 browser.tabs.update(sender.tab.id, {
                     url: browser.runtime.getURL("openfront-blocked.html"),

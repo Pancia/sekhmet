@@ -1,4 +1,10 @@
-// Hard block for openfront.io.
+// Hard block for openfront.io. DISABLED - not in the manifest.
+//
+// Superseded by the page-wide gate in overlays.js: a 15s hold instead of a wall.
+// Kept, along with openfront-blocked.html/.js and the "openfrontBlocked" branch
+// in background.js, because turning it back on is one manifest entry - swap the
+// openfront content script's js/run_at/all_frames back to what the block below
+// documents.
 //
 // Runs at document_start, before the page has parsed a single tag: kill the
 // load, then hand off to the background script to reroute the tab to the

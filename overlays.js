@@ -1,9 +1,45 @@
 let initializeOverlays = (function() {
     let {log, error} = initLogger("overlays")
 
+    // openfront.io gets the player's gate stretched over the whole page. This
+    // replaced a hard block that stopped the load at document_start and rerouted
+    // the tab: the block worked, but "never" is a rule you end up switching off,
+    // whereas a hold you can always complete stays survivable and still costs
+    // enough to break the reflex. Hence 15s - longer than the player's 10.
+    const OPENFRONT_OVERLAY = {
+        overlays: [
+            {
+                // The root page only. That is the front door the reflex actually
+                // takes you to; a deeper path is a match already under way, where a
+                // gate interrupts rather than deters.
+                pathPattern: /^\/$/,
+                // body rather than a game container because there is nothing
+                // stable to hang it off before the bundle has run, and fixed
+                // positioning means the host element's size is irrelevant.
+                selector: "body",
+                singular: true,
+                fixed: true,
+                zIndex: 2147483000,
+                // A single key for the whole visit. gateKey() would otherwise
+                // hand back the pathname, and joining a lobby pushes a new URL -
+                // re-raising the gate mid-match would read as a bug, not a pause.
+                gateKey: "openfront",
+                // Remembered, but only briefly. Bouncing out to a match and back,
+                // a reload, or a tab reopened straight away are all one visit, and
+                // asking again there is friction rather than a decision. Past the
+                // cooldown it is a fresh approach and worth the full 15s again.
+                rememberCleared: true,
+                clearedTtlMs: 5 * 60 * 1000,
+                holdTime: 15000
+            }
+        ]
+    };
+
     const OVERLAY_CONFIG = {
         "www.youtube.com": {
-            globalStyles: '#contents { filter: grayscale(1); }',
+            // On the children rather than #contents itself, so the home feed's row
+            // bars - also children - can be left out and keep their gold ring.
+            globalStyles: '#contents > :not(.row-overlay) { filter: grayscale(1); }',
             excludePaths: [/^\/embed/],
             overlays: [
                 {
@@ -30,8 +66,6 @@ let initializeOverlays = (function() {
                     pathPattern: /\/(watch|live)/,
                     selector: "#movie_player",
                     singular: true,
-                    message: "STOP! is it really worth it?",
-                    buttonText: "Hold to watch",
                     // 10s, the same hold the feeling tracker asks for.
                     holdTime: 10000,
                     pauseWhileCovered: true,
@@ -72,7 +106,11 @@ let initializeOverlays = (function() {
                     filterFunction: null  // Will be set dynamically
                 }
             ]
-        }
+        },
+        // Both, because the manifest matches the bare host and its subdomains
+        // and this lookup is an exact match on location.host.
+        "openfront.io": OPENFRONT_OVERLAY,
+        "www.openfront.io": OPENFRONT_OVERLAY
     };
 
     // Fast early, calm later. The first ~3s at 50ms is what makes an overlay land as
@@ -655,32 +693,24 @@ let initializeOverlays = (function() {
                 right: 0;
                 background-color: rgba(0, 0, 0, 0.8);
                 z-index: 2000;
-                display: flex;
-                align-items: center;
-                justify-content: center;
                 box-sizing: border-box;
-                border: 2px solid #065fd4;
+                border-top: 1px solid rgba(245, 201, 74, 0.5);
                 backdrop-filter: blur(5px);
                 -webkit-backdrop-filter: blur(5px);
+                touch-action: none;
+                user-select: none;
+                -webkit-user-select: none;
             `;
 
-            const revealButton = document.createElement('button');
-            revealButton.textContent = revealLabel(itemName, 0);
-            revealButton.style.cssText = `
-                white-space: nowrap;
-                background-color: #065fd4;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 20px 30px;
-                font-size: 16px;
-                cursor: pointer;
-                position: relative;
-                z-index: 1;
-            `;
-            revealButton.pressAndHold({ holdTime: holdTime, isClickDisabled: true, progressMemory: "instance", progressIndicatorColor: "#ffffff", progressIndicatorOpacity: 0.4 });
+            // The same ring as the gates, drawn in the bar itself.
+            const ring = createHoldRing();
+            overlay.appendChild(ring.element);
 
-            revealButton.addEventListener('complete.pressAndHold', () => {
+            let done = false;
+            const stop = fillWhilePresent(overlay, ring, holdTime, () => done, () => {
+                done = true;
+                stop();
+                ring.element.remove();
                 // Read at completion rather than at creation: a reflow can have
                 // regrouped the row under this overlay since it was built.
                 const revealed = overlay.rowItems || [];
@@ -693,8 +723,11 @@ let initializeOverlays = (function() {
 
                 log(`Revealed a row of ${revealed.length} ${itemName === 'rows' ? 'items' : itemName}`);
             });
+            overlay.ringCleanup = () => { done = true; stop(); ring.element.remove(); };
 
-            overlay.appendChild(revealButton);
+            ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick'].forEach(type => {
+                overlay.addEventListener(type, e => e.stopPropagation());
+            });
             return overlay;
         }
 
@@ -708,6 +741,7 @@ let initializeOverlays = (function() {
                 // A bar with no height still shows its button, which would sit over
                 // whatever happens to be above the feed.
                 if (row.height <= 0) { return; }
+
                 if (row.items.every(el => el.classList.contains('revealed'))) { return; }
 
                 const leader = row.items[0];
@@ -736,6 +770,7 @@ let initializeOverlays = (function() {
             // dropped from the feed entirely.
             overlays.forEach((overlay, leader) => {
                 if (!leaders.has(leader)) {
+                    overlay.ringCleanup();
                     overlay.remove();
                     overlays.delete(leader);
                 }
@@ -756,10 +791,16 @@ let initializeOverlays = (function() {
         rowsResize.observe(container);
         window.addEventListener('resize', relayout);
 
+        // Leaving the home page takes everything down, flag included, so coming
+        // back through SPA navigation wires the feed afresh instead of finding
+        // it marked done with nothing listening.
         onTeardown(() => {
             rowsObserver.disconnect();
             rowsResize.disconnect();
             window.removeEventListener('resize', relayout);
+            overlays.forEach(bar => { bar.ringCleanup(); bar.remove(); });
+            overlays.clear();
+            delete container.dataset.sekhmetRowOverlays;
         });
 
         layout();
@@ -779,12 +820,37 @@ let initializeOverlays = (function() {
     const GATE_STORAGE_KEY = 'sekhmet_clearedGates';
     const GATE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+    // How long a cleared gate stays cleared, per overlay. The two gates mean
+    // opposite things by design: a video you sat through should not ask again for a
+    // month, whereas openfront's pause is the entire point and has to come back.
+    function gateTtl(config) {
+        return (config && typeof config.clearedTtlMs === 'number')
+            ? config.clearedTtlMs
+            : GATE_TTL_MS;
+    }
+
+    // Asked at the moment the gate is decided, not just at hydration. A short TTL
+    // would otherwise only be honoured on a fresh page load: MAIN() re-runs on every
+    // SPA navigation, and a stale in-memory entry would keep standing the gate down
+    // for the life of the tab. Expired entries are dropped on the way past, so the
+    // next write prunes them from storage too.
+    function gateStillCleared(key, config) {
+        const at = clearedGates.get(key);
+        if (typeof at !== 'number') { return false; }
+        if (Date.now() - at < gateTtl(config)) { return true; }
+
+        log(`[DEBUG] Cleared gate for ${key} has expired`);
+        clearedGates.delete(key);
+        return false;
+    }
+
     // videoId -> cleared-at timestamp. Hydrated from storage below; the in-memory
     // copy is what the gate actually reads, because the check has to be synchronous.
     const clearedGates = new Map();
     let activeGate = null;
 
-    function gateKey() {
+    function gateKey(config) {
+        if (config && config.gateKey) { return config.gateKey; }
         const id = new URLSearchParams(window.location.search).get('v');
         return id || window.location.pathname;
     }
@@ -825,9 +891,13 @@ let initializeOverlays = (function() {
         });
     }
 
-    function rememberGateCleared(key) {
+    // The in-memory set always gets the key - that is what stops MAIN() from
+    // re-raising the gate on the next SPA navigation. Only the write-through to
+    // storage is optional, and skipping it is what makes a gate last exactly one
+    // page load.
+    function rememberGateCleared(key, persist) {
         clearedGates.set(key, Date.now());
-        persistClearedGates();
+        if (persist !== false) { persistClearedGates(); }
     }
 
     // Started at load, not at first gate: the read is a round trip to the background
@@ -851,18 +921,164 @@ let initializeOverlays = (function() {
     });
 
     gatesHydrated.then(() => {
-        if (activeGate && clearedGates.has(activeGate.key)) {
+        if (activeGate && gateStillCleared(activeGate.key, activeGate.config)) {
             log(`Gate for ${activeGate.key} was cleared previously, standing down`);
             activeGate.clear();
         }
     });
 
+    // The gate's only control: a gold ring, nothing until you click. It appears
+    // under the pointer rather than at a fixed spot, so the image is left whole
+    // until you choose where to put it. Stroked, never filled, so the picture
+    // shows through the middle of it too.
+    function createHoldRing() {
+        const SIZE = 96, R = 40, WIDTH = 6, C = 2 * Math.PI * R;
+        const NS = 'http://www.w3.org/2000/svg';
+        const el = (tag, attrs, parent) => {
+            const n = document.createElementNS(NS, tag);
+            Object.entries(attrs).forEach(([k, v]) => n.setAttribute(k, v));
+            if (parent) { parent.appendChild(n); }
+            return n;
+        };
+        const svg = el('svg', { width: SIZE, height: SIZE, viewBox: `0 0 ${SIZE} ${SIZE}` });
+        svg.style.cssText = `
+            position: absolute;
+            left: 0; top: 0;
+            margin: ${-SIZE / 2}px 0 0 ${-SIZE / 2}px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 250ms ease;
+            overflow: visible;
+            filter: drop-shadow(0 0 8px rgba(255, 204, 40, 0.85)) drop-shadow(0 0 4px rgba(0, 0, 0, 0.5));
+        `;
+
+        // Bright gold: pale highlight at the top-left running to a rich yellow gold, so
+        // the arc reads as metal catching light rather than a flat yellow line. Kept
+        // off the browns - a deep amber end dulled it towards bronze. The
+        // id is per ring because gradients are looked up document-wide.
+        const id = `sekhmet-gold-${Math.random().toString(36).slice(2)}`;
+        const grad = el('linearGradient', { id, x1: '0', y1: '0', x2: '1', y2: '1' }, el('defs', {}, svg));
+        [['0', '#fffbe0'], ['0.3', '#ffe45c'], ['0.65', '#ffc414'], ['1', '#e0a100']].forEach(([offset, color]) => {
+            el('stop', { offset, 'stop-color': color }, grad);
+        });
+
+        const circle = attrs => el('circle', Object.assign({
+            cx: SIZE / 2, cy: SIZE / 2, r: R, fill: 'none'
+        }, attrs), svg);
+        // A dark band under the gold, a little wider than it, so the ring holds its
+        // own against bright and busy parts of the image - gold alone vanished into
+        // sunflowers. Only the band is darkened; the middle stays see-through.
+        circle({ stroke: 'rgba(0, 0, 0, 0.55)', 'stroke-width': WIDTH + 6 });
+        // The track: where the gold will go.
+        circle({ stroke: 'rgba(255, 220, 140, 0.3)', 'stroke-width': WIDTH });
+        const arc = circle({
+            stroke: `url(#${id})`,
+            'stroke-width': WIDTH,
+            'stroke-linecap': 'round',
+            'stroke-dasharray': C,
+            'stroke-dashoffset': C,
+            // Start at twelve o'clock and run clockwise.
+            transform: `rotate(-90 ${SIZE / 2} ${SIZE / 2})`
+        });
+
+        return {
+            element: svg,
+            moveTo(x, y) { svg.style.left = `${x}px`; svg.style.top = `${y}px`; },
+            radius: R + WIDTH / 2,
+            // 'active' while filling, 'dim' while paused, anything else hidden.
+            show(state) { svg.style.opacity = state === 'active' ? '1' : state === 'dim' ? '0.4' : '0'; },
+            setProgress(fraction) { arc.setAttribute('stroke-dashoffset', C * (1 - fraction)); }
+        };
+    }
+
+    // Click anywhere on the gate and the ring fills by itself - no holding - for as
+    // long as the pointer stays on it. Wandering off the ring, off the gate, or to
+    // another tab or window pauses it and dims it where it is. Coming back is not
+    // enough to resume: it takes another click, and a click elsewhere carries the
+    // ring there with its progress intact. Progress only ever goes forward.
+    function fillWhilePresent(overlay, ring, holdTime, isDisposed, onComplete) {
+        // How far from the centre still counts as on the ring: its outer edge plus
+        // some slack, so a resting hand that drifts a little does not trip it.
+        const REACH = ring.radius + 20;
+        let progress = 0, running = false, frame = null, last = 0, cx = 0, cy = 0;
+        // Where the pointer last was, in viewport coordinates.
+        let px = 0, py = 0;
+
+        const tick = now => {
+            frame = null;
+            if (isDisposed() || !running) { return; }
+            progress += now - last;
+            last = now;
+            ring.setProgress(Math.min(progress / holdTime, 1));
+            if (progress >= holdTime) { onComplete(); return; }
+            frame = requestAnimationFrame(tick);
+        };
+        const pause = () => {
+            if (!running) { return; }
+            running = false;
+            if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
+            ring.show('dim');
+        };
+        const localPoint = (clientX, clientY) => {
+            const rect = overlay.getBoundingClientRect();
+            return [clientX - rect.left, clientY - rect.top];
+        };
+        const onRing = (x, y) => Math.hypot(x - cx, y - cy) <= REACH;
+
+        overlay.addEventListener('pointerdown', e => {
+            if (e.button !== 0) { return; }
+            e.preventDefault();
+            px = e.clientX; py = e.clientY;
+            const [x, y] = localPoint(px, py);
+            // A click on the ring resumes it where it is; anywhere else moves it.
+            if (!(progress > 0 && onRing(x, y))) {
+                cx = x; cy = y;
+                ring.moveTo(x, y);
+            }
+            ring.show('active');
+            if (!running) {
+                running = true;
+                last = performance.now();
+                frame = requestAnimationFrame(tick);
+            }
+        });
+        // Watched on the window, not the overlay: a scroll can carry the overlay
+        // out from under the pointer, and moving off it then still has to count.
+        const onMove = e => {
+            px = e.clientX; py = e.clientY;
+            if (running && !onRing(...localPoint(px, py))) { pause(); }
+        };
+        window.addEventListener('pointermove', onMove, true);
+        // A scroll carries the overlay out from under a pointer that has not moved,
+        // and the browser reports that as a leave - but scrolling is not leaving.
+        // Only a leave the pointer actually moved for pauses.
+        overlay.addEventListener('pointerleave', e => {
+            if (e.clientX !== px || e.clientY !== py) { pause(); }
+        });
+        // The ring scrolls with the page. A nudge of the wheel leaves the pointer
+        // within reach and it carries on; scrolling it out of reach pauses it.
+        const onScroll = () => {
+            if (running && !onRing(...localPoint(px, py))) { pause(); }
+        };
+        const onHidden = () => { if (document.hidden) { pause(); } };
+        window.addEventListener('blur', pause);
+        window.addEventListener('scroll', onScroll, true);
+        document.addEventListener('visibilitychange', onHidden);
+        overlay.addEventListener('contextmenu', e => e.preventDefault());
+        return () => {
+            window.removeEventListener('blur', pause);
+            window.removeEventListener('pointermove', onMove, true);
+            window.removeEventListener('scroll', onScroll, true);
+            document.removeEventListener('visibilitychange', onHidden);
+        };
+    }
+
     // Unlike addIndividualOverlays, this is a single overlay covering the whole
     // container - no item list, no adjacency, nothing to observe for new arrivals.
     function addSingularOverlay(containerSelector, config) {
-        const key = gateKey();
+        const key = gateKey(config);
 
-        if (clearedGates.has(key)) {
+        if (gateStillCleared(key, config)) {
             log(`[DEBUG] Gate already cleared for ${key}`);
             return;
         }
@@ -891,47 +1107,18 @@ let initializeOverlays = (function() {
         overlay.className = 'singular-overlay';
         overlay.dataset.gateKey = key;
         overlay.style.cssText = `
-            position: absolute;
+            position: ${config.fixed ? 'fixed' : 'absolute'};
             inset: 0;
             background-color: rgba(0, 0, 0, 0.94);
-            z-index: 2000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
+            z-index: ${config.zIndex || 2000};
             box-sizing: border-box;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
         `;
 
-        const message = document.createElement('div');
-        message.textContent = config.message || 'Is it really worth it?';
-        message.style.cssText = `
-            color: #ffffff;
-            font-family: Roboto, Arial, sans-serif;
-            font-size: 24px;
-            font-weight: 500;
-            text-align: center;
-            padding: 0 20px;
-        `;
-        overlay.appendChild(message);
-
-        const revealButton = document.createElement('button');
-        revealButton.textContent = config.buttonText || 'Hold to watch';
-        revealButton.style.cssText = `
-            white-space: nowrap;
-            background-color: #065fd4;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 20px 30px;
-            font-size: 16px;
-            cursor: pointer;
-            position: relative;
-            z-index: 1;
-        `;
-        revealButton.pressAndHold({ holdTime: holdTime, isClickDisabled: true, progressMemory: "instance", progressIndicatorColor: "#ffffff", progressIndicatorOpacity: 0.4 });
+        const ring = createHoldRing();
+        overlay.appendChild(ring.element);
 
         // Covering the player is only half of it - the audio would carry on behind
         // the overlay otherwise, which is most of what makes autoplay hard to leave.
@@ -949,15 +1136,17 @@ let initializeOverlays = (function() {
         // flag as well as the observer: throttle has a trailing edge, so a callback
         // can still be in flight when we disconnect.
         const guard = new MutationObserver(throttle(200, () => {
-            if (disposed || clearedGates.has(key)) { return; }
+            if (disposed || gateStillCleared(key, config)) { return; }
             if (!overlay.isConnected && container.isConnected) {
                 log('[DEBUG] Gate was removed by the player, re-attaching');
                 container.appendChild(overlay);
             }
         }));
 
+        let stopHold = () => {};
         const teardown = () => {
             disposed = true;
+            stopHold();
             guard.disconnect();
             if (video) { video.removeEventListener('play', keepPaused); }
             overlay.remove();
@@ -977,28 +1166,29 @@ let initializeOverlays = (function() {
             }
         };
 
-        revealButton.addEventListener('complete.pressAndHold', () => {
-            rememberGateCleared(key);
+        stopHold = fillWhilePresent(overlay, ring, holdTime, () => disposed, () => {
+            rememberGateCleared(key, config.rememberCleared);
             clearGate();
             log(`Gate cleared for ${key}`);
         });
 
-        overlay.appendChild(revealButton);
-
-        // The player treats a click anywhere on itself as play/pause. The button's own
-        // mousedown handler has already run by the time this fires, so swallowing here
-        // costs nothing and stops the gate from toggling playback underneath it.
-        ['mousedown', 'mouseup', 'click', 'dblclick'].forEach(type => {
+        // The player treats a click anywhere on itself as play/pause. The hold's own
+        // listeners are on the overlay itself, so they have already run by the time
+        // these stop the event climbing into the player underneath.
+        ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick'].forEach(type => {
             overlay.addEventListener(type, e => e.stopPropagation());
         });
 
-        if (window.getComputedStyle(container).position === 'static') {
+        // Only an absolutely positioned overlay needs its host to be a containing
+        // block; a fixed one is laid out against the viewport, so leave the page's
+        // own positioning alone.
+        if (!config.fixed && window.getComputedStyle(container).position === 'static') {
             container.style.position = 'relative';
         }
 
         container.appendChild(overlay);
         guard.observe(container, { childList: true });
-        activeGate = { key, overlay, teardown, clear: clearGate };
+        activeGate = { key, config, overlay, teardown, clear: clearGate };
 
         // Navigating away has to take the gate with it. Without this the guard keeps
         // re-attaching an overlay for the previous video, and a same-video URL change
@@ -1132,7 +1322,11 @@ let initializeOverlays = (function() {
                     if (overlayConfig.waitFor) {
                         // Wait for the video element too, not just the container: the
                         // gate has nothing to hold paused until the player has one.
-                        const validation = (container) => !!container.querySelector('video');
+                        // Only when it is meant to hold something - a page-wide gate
+                        // over a site with no <video> would wait forever.
+                        const validation = overlayConfig.pauseWhileCovered
+                            ? (container) => !!container.querySelector('video')
+                            : null;
                         onTeardown(waitForElementToBeLoaded(overlayConfig.selector, () => {
                             addSingularOverlay(overlayConfig.selector, overlayConfig);
                         }, validation, POLL_CONFIG));
@@ -1156,20 +1350,34 @@ let initializeOverlays = (function() {
 
     var lastUrl = null;
 
+    // The fragment is deliberately not part of this. openfront.io routes through
+    // it, and MAIN() retires the whole page's wiring before laying it down again -
+    // so a hash change mid-hold would take the gate with it and raise a fresh one,
+    // handing back the 15 seconds already served. Nothing here keys off the
+    // fragment on either host: YouTube's own same-video stamp ("&t=") lives in the
+    // query, which is still compared.
+    function navigationUrl() {
+        return location.pathname + location.search;
+    }
+
     var onMutationsFinished = debounce(100, function() {
-        if (lastUrl !== location.href || !lastUrl) {
-            lastUrl = location.href;
-            log('[DEBUG] URL changed to:', lastUrl);
+        const url = navigationUrl();
+        if (lastUrl !== url || !lastUrl) {
+            lastUrl = url;
+            log('[DEBUG] URL changed to:', url);
             MAIN();
         }
     });
 
     async function initializeOverlays() {
-        if (window.location.hostname !== "www.youtube.com") {
+        // Was a hardcoded www.youtube.com. Both manifest entries match more hosts
+        // than the config covers - m./music.youtube.com, openfront subdomains - so
+        // the config is the guest list.
+        if (!OVERLAY_CONFIG[window.location.host]) {
             return;
         }
 
-        log("Initializing YouTube overlays");
+        log(`Initializing overlays for ${window.location.host}`);
 
         // Make sure overlay is visible on top of blur
         addGlobalStyle(`
@@ -1185,7 +1393,7 @@ let initializeOverlays = (function() {
         // Run once up front. onMutationsFinished is debounced, so leaving the first
         // pass to it means waiting for the whole page to stop mutating before the
         // blur rules are even installed.
-        lastUrl = location.href;
+        lastUrl = navigationUrl();
         MAIN();
 
         const observer = new MutationObserver(onMutationsFinished);

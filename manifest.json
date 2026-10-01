@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
     "name": "Sekhmet",
-    "description": "Enhances YouTube with download links, feeling tracker, and content overlays",
+    "description": "Gates the feeds that eat attention - YouTube, openfront.io - behind a hold, plus downloads and a feeling tracker",
     "version": "1.0",
     "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvIJDcmhy/AetmNtRb6R0jnxlg4nlYayn12bsRzQJzBnjZq+99bUTH0JILWOqRKjgCN1lmGfXL0NLB5miWYqHuIR0eEZdGyLMMTxFp+0N2UZfZ55Ju9yEt76haJ46qbj5FPHp26k8RRNxTA6KVJDWf9Ui0iz4IpaC1O5HrGMZa1FNlOWuHSG40Y1NBkZu4r82TtDzNDXyynwOrjkj9hwP+E3of+nafTzxnljuOdacr0sR828iOHqmhNaKFtniSAwaKz+hGJ2WDX9lybqLlb3jlogm2m1UQfleK03O3YnY/SgRQtm1C5cVhuAUB6xsxTgyhEbw7f5DOCtUHhBf2NHA1wIDAQAB",
     "browser_specific_settings": {
@@ -26,9 +26,9 @@
         },
         {
             "matches": ["*://openfront.io/*", "*://*.openfront.io/*"],
-            "js": ["polyfill.js", "openfront-block.js"],
-            "run_at": "document_start",
-            "all_frames": true
+            "js": ["polyfill.js", "lib.js", "overlays.js", "openfront-gate.js"],
+            "run_at": "document_end",
+            "all_frames": false
         }
     ],
     "web_accessible_resources": ["player-bridge.js"]
