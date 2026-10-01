@@ -201,6 +201,10 @@ let initializeVolume = (function() {
             padding: '10px 16px',
             borderRadius: '10px',
             backgroundColor: 'rgba(0, 0, 0, 0.72)',
+            // Gold, matching the gate's ring: a dark box alone was easy to miss
+            // over a dark scene.
+            border: '2px solid #f5c94a',
+            boxShadow: '0 0 12px rgba(245, 201, 74, 0.45)',
             color: '#fff',
             fontFamily: 'Roboto, Arial, sans-serif',
             opacity: '0',
