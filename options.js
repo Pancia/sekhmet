@@ -17,6 +17,10 @@ function readAsImage(file) {
 
 async function shrink(file) {
     const img = await readAsImage(file);
+    // An SVG with no intrinsic size decodes as 0x0 and would store an empty image.
+    if (!img.naturalWidth || !img.naturalHeight) {
+        throw new Error('it has no size (an SVG without width/height?)');
+    }
     const scale = Math.min(1, MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
     const width = Math.round(img.naturalWidth * scale);
     const height = Math.round(img.naturalHeight * scale);
@@ -33,8 +37,12 @@ function el(tag, props, ...children) {
     return node;
 }
 
+// A message to show in a slot's status line on its next render, then forget.
+const notices = {};
+
 async function renderSlot(slot, label, list) {
-    const status = el('div', { className: 'status' });
+    const status = el('div', { className: 'status', textContent: notices[slot] || '' });
+    delete notices[slot];
     const grid = el('div', { className: 'grid' });
 
     for (const entry of list) {
@@ -43,8 +51,12 @@ async function renderSlot(slot, label, list) {
         if (data) { tile.style.backgroundImage = `url("${data}")`; }
         const remove = el('button', { type: 'button', textContent: '×', title: `Remove ${entry.name}` });
         remove.addEventListener('click', async () => {
-            await Wallpapers.remove(slot, entry.id);
-            render();
+            try {
+                await Wallpapers.remove(slot, entry.id);
+                render();
+            } catch (e) {
+                status.textContent = `Could not remove ${entry.name}: ${e.message}`;
+            }
         });
         tile.append(remove);
         grid.append(tile);
@@ -52,18 +64,24 @@ async function renderSlot(slot, label, list) {
 
     const input = el('input', { type: 'file', accept: 'image/*', multiple: true });
     const add = el('label', { className: 'add' }, 'Add images', input);
+    // One bad file is skipped, not fatal: the rest still go in, and the page is
+    // redrawn either way so whatever did land shows up. The error message is
+    // carried across the redraw, which replaces this section.
     const addFiles = async files => {
         const images = Array.from(files).filter(f => f.type.startsWith('image/'));
+        const failed = [];
         for (let i = 0; i < images.length; i++) {
             status.textContent = `Adding ${i + 1} of ${images.length}…`;
             try {
                 await Wallpapers.add(slot, await shrink(images[i]));
             } catch (e) {
-                status.textContent = `Could not add ${images[i].name}: ${e.message}`;
-                return;
+                failed.push(`${images[i].name}: ${e.message}`);
             }
         }
-        render();
+        // Cleared so picking the same file again still fires change.
+        input.value = '';
+        if (failed.length) { notices[slot] = `Could not add ${failed.join('; ')}`; }
+        await render();
     };
     input.addEventListener('change', () => addFiles(input.files));
     add.addEventListener('dragover', e => { e.preventDefault(); add.classList.add('dragging'); });

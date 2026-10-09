@@ -21,21 +21,31 @@ const Wallpapers = (function() {
         return idx;
     }
 
-    async function add(slot, { name, width, height, dataUrl }) {
+    // add and remove are read-modify-write on one index key, so two in flight - a
+    // quick double removal, files dropped on two slots at once - would each write
+    // back a copy missing the other's change. They queue behind one another.
+    let queue = Promise.resolve();
+    const serial = fn => (...args) => {
+        const run = queue.then(() => fn(...args));
+        queue = run.catch(() => {});
+        return run;
+    };
+
+    const add = serial(async function(slot, { name, width, height, dataUrl }) {
         const idx = await index();
         const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
         await browser.storage.local.set({ [imageKey(id)]: dataUrl });
         idx[slot].push({ id, name, width, height });
         await browser.storage.local.set({ [INDEX_KEY]: idx });
         return id;
-    }
+    });
 
-    async function remove(slot, id) {
+    const remove = serial(async function(slot, id) {
         const idx = await index();
         idx[slot] = idx[slot].filter(w => w.id !== id);
         await browser.storage.local.set({ [INDEX_KEY]: idx });
         await browser.storage.local.remove(imageKey(id));
-    }
+    });
 
     async function image(id) {
         const got = await browser.storage.local.get(imageKey(id));
@@ -48,10 +58,15 @@ const Wallpapers = (function() {
     // to a new one.
     async function pick(slot, seed = Math.random()) {
         const list = (await index())[slot] || [];
-        if (list.length === 0) { return null; }
-        const entry = list[Math.floor(seed * list.length) % list.length];
-        const dataUrl = await image(entry.id);
-        return dataUrl ? Object.assign({ dataUrl }, entry) : null;
+        // Start at the seeded entry and walk on past any whose picture is missing,
+        // so one broken entry never turns the gate black while others exist.
+        const start = Math.floor(seed * list.length) % Math.max(list.length, 1);
+        for (let i = 0; i < list.length; i++) {
+            const entry = list[(start + i) % list.length];
+            const dataUrl = await image(entry.id);
+            if (dataUrl) { return Object.assign({ dataUrl }, entry); }
+        }
+        return null;
     }
 
     return { SLOTS, index, add, remove, image, pick };
