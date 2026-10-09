@@ -658,6 +658,11 @@ let initializeOverlays = (function() {
         if (window.getComputedStyle(container).position === 'static') {
             container.style.position = 'relative';
         }
+        // Keep the bars' z-index inside the grid. The greyscale filter used to make
+        // #contents a stacking context; it now sits on the children instead, and
+        // without this the bars would paint over the sticky chips bar, the masthead
+        // and the miniplayer.
+        container.style.isolation = 'isolate';
 
         const overlays = new Map();   // row-leading card -> its overlay
 
