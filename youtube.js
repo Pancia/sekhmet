@@ -18,7 +18,42 @@ let initializeYoutube = (function() {
         log('Shorts scrolling disabled');
     }
 
+    // The "Ask about this video" (Ask AI) panel's text is small for reading at a
+    // distance. The panel is matched by its target-id - YouTube's class names
+    // there are generated and churn. Its children set their own font sizes, so
+    // setting one on #content alone wouldn't cascade - even <strong> and the
+    // timestamp spans carry their own - so every descendant gets it, !important.
+    const ASK_AI_STYLE_ID = "sekhmet-ask-ai-text";
+    //
+    // The panel is also capped at the player's height; that cap is lifted and the
+    // panel made drag-resizable from its bottom-right corner. The :not(#_) is
+    // there for specificity only - YouTube's height rules go through an id, and
+    // height can't be !important or it would beat the inline height the resize
+    // handle writes.
+    const ASK_AI_CSS = `
+        ytd-engagement-panel-section-list-renderer[target-id="PAyouchat"]:not(#_) {
+            height: 80vh;
+            min-height: 300px !important;
+            max-height: none !important;
+            resize: vertical;
+            overflow: hidden;
+        }
+        ytd-engagement-panel-section-list-renderer[target-id="PAyouchat"] #content * {
+            font-size: 24px !important;
+            line-height: 34px !important;
+        }
+    `;
+
+    function enlargeAskAiText() {
+        if (document.getElementById(ASK_AI_STYLE_ID)) return;
+        const style = document.createElement('style');
+        style.id = ASK_AI_STYLE_ID;
+        style.textContent = ASK_AI_CSS;
+        (document.head || document.documentElement).appendChild(style);
+    }
+
     function initializeYoutube() {
+        enlargeAskAiText();
         document.addEventListener('keydown', (event) => {
             // Block arrow keys on Shorts pages to prevent navigating to next/prev short.
             // volume.js normally claims these first from window capture; this still
