@@ -52,9 +52,30 @@ let initializeYoutube = (function() {
         (document.head || document.documentElement).appendChild(style);
     }
 
+    // "?" opens YouTube's keyboard-shortcuts dialog but does nothing once it's
+    // open, so close it ourselves to make "?" a toggle. The dialog element stays
+    // in the DOM after closing (just hidden), hence the visibility check. Closing
+    // goes through a synthetic Escape, which the dialog's overlay manager already
+    // honours - its methods live in the page's JS world, out of a content
+    // script's reach on Chromium.
+    function closeHotkeyDialogIfOpen() {
+        const dialog = document.querySelector('ytd-hotkey-dialog-renderer');
+        if (!dialog || dialog.getClientRects().length === 0) return false;
+        document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Escape', code: 'Escape', bubbles: true, cancelable: true, composed: true
+        }));
+        return true;
+    }
+
     function initializeYoutube() {
         enlargeAskAiText();
         document.addEventListener('keydown', (event) => {
+            if (event.key === '?' && !isTypingTarget(event) && closeHotkeyDialogIfOpen()) {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
+
             // Block arrow keys on Shorts pages to prevent navigating to next/prev short.
             // volume.js normally claims these first from window capture; this still
             // fires whenever it declines. Skipped while typing so the arrows can
