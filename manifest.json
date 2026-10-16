@@ -50,6 +50,13 @@
             "js": ["polyfill.js", "lib.js", "thechosen.js"],
             "run_at": "document_end",
             "all_frames": false
+        },
+        {
+            "matches": ["*://*/*"],
+            "include_globs": ["*://*solarmovie*/*"],
+            "js": ["allow-right-click.js"],
+            "run_at": "document_start",
+            "all_frames": false
         }
     ],
     "web_accessible_resources": ["player-bridge.js", "wallpaper.html"],

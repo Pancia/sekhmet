@@ -71,6 +71,7 @@ browser, not in this repo.
 - `openfront-block.js`: **Disabled** (not in the manifest). The previous approach: stopped openfront.io at `document_start` and asked the background script to reroute the tab
 - `openfront-blocked.html` / `openfront-blocked.js`: The commitment reminder the block rerouted to - also unused while the block is off
 - `thechosen.js`: watch.thechosen.tv - moves the episode sidebar ("Next Episode" and the rest of the column) from beside the player to below it. Finds the two-column layout by shape rather than by class name (the outermost flex row above the `<video>` that has a column the player is not in), tags it, and lets two CSS rules do the stacking - no DOM is reparented, because React owns those nodes. No-ops where the site's own breakpoint has already stacked the layout
+- `allow-right-click.js`: Restores the native right-click menu on sites that suppress it (currently any host containing "solarmovie") by stopping `contextmenu` at window capture, before the page's own listeners see it. Add a site to both its `include_globs` in the manifest and `ALLOW_RIGHT_CLICK_HOSTS` in the script - the glob alone also lets the name through when it is only in the path
 - `index.js`: Main coordinator script
 - `background.js`: Background script for context menus and messaging
 - `manifest.json`: Extension configuration
