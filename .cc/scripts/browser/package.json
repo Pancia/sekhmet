@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "Browser fixtures for loop.js and the feeling-tracker countdown. See README.md.",
+  "dependencies": {
+    "puppeteer-core": "23"
+  }
+}

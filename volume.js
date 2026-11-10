@@ -36,6 +36,14 @@ let initializeVolume = (function() {
     }
 
     function injectBridge() {
+        // On pages YouTube's service worker controls, Chromium logs "Unsafe
+        // attempt to load URL chrome-extension://.../player-bridge.js ...
+        // Domains, protocols and ports must match." That is YouTube's
+        // Connection-Allowlist-Report-Only header. It only reports, so the load
+        // still succeeds; the message lands on the extension's Errors page
+        // because this line starts the fetch. If YouTube ever enforces the
+        // allowlist, the bridge stops loading and onKeyDown leaves the arrows to
+        // the page.
         try {
             const script = document.createElement('script');
             script.src = browser.runtime.getURL('player-bridge.js');
