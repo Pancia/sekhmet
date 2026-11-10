@@ -1,0 +1,542 @@
+<title>Sekhmet Countdown Mockups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Roboto:wght@400;500&display=swap">
+<style>
+/* Layout: a working bench. The live mock page and its controls come first, the side-by-side looks below. */
+:root {
+  --bg: #F1F2F6;
+  --surface: #FFFFFF;
+  --ink: #1A1D27;
+  --muted: #565C70;
+  --line: #D6DAE4;
+  --accent: #7A4F00;
+  --accent-soft: #F7E9CC;
+  --on-accent: #FFFFFF;
+  --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body: "Figtree", "Helvetica Neue", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  /* The video surface is dark in every theme, like real footage. */
+  --video: #11131A;
+  --video-fg: #F1F1F3;
+  --dlg-bg: #FFFFFF;
+  --dlg-title: #333333;
+  --dlg-text: #666666;
+  --worse: #F44336;
+  --neutral: #2196F3;
+  --better: #4CAF50;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #13151C; --surface: #1C1F29; --ink: #E9EBF2; --muted: #A3A9BB;
+    --line: #333745; --accent: #F0B454; --accent-soft: #3A2E17; --on-accent: #1A1408;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #13151C; --surface: #1C1F29; --ink: #E9EBF2; --muted: #A3A9BB;
+  --line: #333745; --accent: #F0B454; --accent-soft: #3A2E17; --on-accent: #1A1408;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+.wrap {
+  max-width: 1160px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+  display: grid; gap: 32px;
+}
+h1 { font: 600 clamp(26px, 4vw, 34px)/1.15 var(--display); margin: 0 0 6px; text-wrap: balance; }
+h2 { font: 600 21px/1.25 var(--display); margin: 0 0 14px; text-wrap: balance; }
+h3 { font: 600 16px/1.3 var(--body); margin: 0; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 66ch; }
+button { font: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The bench */
+.bench { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 880px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.bench-main { display: grid; gap: 8px; min-width: 0; }
+@media (min-width: 881px) { .bench-main { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); } }
+.readline { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+#event { color: var(--ink); font-weight: 500; }
+
+/* The mock watch page */
+.stage {
+  position: relative; overflow: hidden; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--yt-bg); color: var(--yt-fg);
+  font-family: Roboto, Arial, sans-serif; font-size: 13px;
+}
+.stage[data-yt="dark"] {
+  --yt-bg: #0F0F0F; --yt-fg: #F1F1F1; --yt-block: #272727; --yt-line: #2B2B2B;
+  --w-bg: rgba(24, 25, 31, .66); --w-fg: #F4F2EC; --w-accent: #F3C77F; --w-hot: #FFD99A; --w-track: rgba(255, 255, 255, .2);
+}
+.stage[data-yt="light"] {
+  --yt-bg: #FFFFFF; --yt-fg: #0F0F0F; --yt-block: #E8E8E8; --yt-line: #E5E5E5;
+  --w-bg: rgba(255, 255, 255, .86); --w-fg: #3A3324; --w-accent: #B57A12; --w-hot: #94600A; --w-track: rgba(0, 0, 0, .14);
+}
+.mast { height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px; border-bottom: 1px solid var(--yt-line); }
+.block { background: var(--yt-block); border-radius: 4px; }
+.mast-brand { width: 76px; height: 16px; flex: none; }
+.mast-center { display: flex; align-items: center; gap: 10px; flex: 1; justify-content: center; min-width: 0; }
+.mast-search { flex: 0 1 260px; height: 26px; border-radius: 13px; min-width: 40px; }
+.mast-pill { display: inline-flex; align-items: center; height: 32px; padding: 0 10px; border-radius: 16px; background: var(--yt-block); font-size: 20px; line-height: 1; flex: none; }
+.mast-avatar { width: 26px; height: 26px; border-radius: 50%; flex: none; }
+.content { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 27%; gap: 14px; padding: 14px; }
+.player { position: relative; aspect-ratio: 16 / 9; max-width: 100%; border-radius: 8px; overflow: hidden; background: var(--video); cursor: pointer; }
+.art {
+  position: absolute; inset: 0;
+  background: radial-gradient(60% 90% at 25% 30%, #4A3A6B, transparent 70%), radial-gradient(60% 90% at 80% 70%, #7A4A2E, transparent 70%), #1B1D29;
+  background-size: 180% 180%;
+  animation: drift 16s linear infinite alternate;
+}
+.paused .art { animation-play-state: paused; }
+@keyframes drift { to { background-position: 100% 60%; } }
+.art-label { position: absolute; inset: 0; display: grid; place-items: center; color: var(--video-fg); opacity: .34; font-size: 14px; }
+.pctl { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 10px 7px; display: flex; align-items: center; gap: 8px; color: var(--video-fg); background: linear-gradient(transparent, rgba(0, 0, 0, .55)); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pbar { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .3); overflow: hidden; }
+.pbar i { display: block; height: 100%; background: #E04A3F; transform-origin: left; transform: scaleX(var(--prog, 0)); }
+.below { display: grid; gap: 8px; padding-top: 10px; }
+.below .block:nth-child(1) { height: 16px; width: 70%; }
+.below .block:nth-child(2) { height: 11px; width: 40%; }
+.side { display: grid; gap: 9px; align-content: start; }
+.side-row { display: grid; grid-template-columns: 44% 1fr; gap: 6px; }
+.side-row .block:first-child { aspect-ratio: 16 / 9; }
+.side-text { display: grid; gap: 5px; align-content: start; }
+.side-text .block { height: 7px; }
+.side-text .block:last-child { width: 60%; }
+.layer { position: absolute; inset: 0; pointer-events: none; --r: 10px; --l: auto; --origin: right; }
+.layer.pos-tl { --r: auto; --l: 10px; --origin: left; }
+.layer .cd { pointer-events: auto; position: absolute; top: 10px; right: var(--r); left: var(--l); }
+.on-video { --w-bg: rgba(24, 25, 31, .66); --w-fg: #F4F2EC; --w-accent: #F3C77F; --w-hot: #FFD99A; --w-track: rgba(255, 255, 255, .2); }
+
+/* The check-in, copied from the real one */
+.dlg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(300px, 88%); padding: 20px; border-radius: 8px; background: var(--dlg-bg); box-shadow: 0 4px 12px rgba(0, 0, 0, .35); text-align: center; }
+.dlg h4 { margin: 0 0 12px; font-size: 21px; color: var(--dlg-title); }
+.dlg p { color: var(--dlg-text); font-size: 13px; }
+.dlg-row { display: flex; gap: 8px; margin-top: 16px; }
+.dlg-row button { flex: 1; padding: 10px 4px; border: 0; border-radius: 4px; color: #FFFFFF; cursor: pointer; font-size: 13px; }
+.dlg-note { margin-top: 12px; font-size: 12px !important; }
+
+/* The countdown looks */
+.cd {
+  appearance: none; border: 0; padding: 0; margin: 0; background: none; color: var(--w-fg); cursor: pointer;
+  font-family: Roboto, Arial, sans-serif; font-variant-numeric: tabular-nums;
+  display: inline-flex; align-items: center; opacity: .8;
+  transition: opacity .4s ease;
+  animation: cd-in .7s ease backwards;
+}
+@keyframes cd-in { from { opacity: 0; } }
+.cd:hover, .cd:focus-visible, .cd.near { opacity: 1; }
+.cd.near { --w-accent: var(--w-hot); }
+.hint { display: inline-block; max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; font-size: 12px; font-weight: 500; transition: max-width .25s ease, opacity .25s ease, margin .25s ease; }
+.cd:hover .hint, .cd:focus-visible .hint, .hints-always .hint { max-width: 150px; opacity: 1; }
+
+.cd-ring { background: var(--w-bg); border-radius: 22px; padding: 3px; }
+.cd-ring .dial { position: relative; width: 36px; height: 36px; display: grid; place-items: center; font-size: 13px; font-weight: 500; }
+.cd-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.cd-ring circle { fill: none; stroke-width: 3; }
+.cd-ring .trk { stroke: var(--w-track); }
+.cd-ring .arc { stroke: var(--w-accent); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: calc(100 * (1 - var(--p, 1))); }
+.cd-ring:hover .hint, .cd-ring:focus-visible .hint, .hints-always .cd-ring .hint { margin: 0 10px 0 6px; }
+
+.cd-pill { position: relative; overflow: hidden; gap: 6px; background: var(--w-bg); border-radius: 8px; padding: 7px 11px 8px; font-size: 13px; }
+.cd-pill .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--w-accent); transform-origin: left; transform: scaleX(var(--p, 1)); }
+.cd-pill:hover .hint, .cd-pill:focus-visible .hint, .hints-always .cd-pill .hint { margin-left: 4px; color: var(--w-accent); }
+
+.cd-whisper { gap: 6px; font-size: 13px; opacity: .62; text-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
+.stage[data-yt="light"] .layer:not(.on-video) .cd-whisper { text-shadow: none; }
+.cd-whisper:hover .hint, .cd-whisper:focus-visible .hint, .hints-always .cd-whisper .hint { margin-left: 2px; text-decoration: underline; }
+
+.layer .cd-edge { top: 0; left: 0; right: 0; height: 8px; display: block; }
+.cd-edge .line { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--w-accent); transform-origin: var(--origin); transform: scaleX(var(--p, 1)); }
+.cd-edge .tag { position: absolute; top: 8px; right: var(--r); left: var(--l); display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 6px; background: var(--w-bg); font-size: 12px; }
+
+.cd-dot { gap: 8px; background: var(--w-bg); border-radius: 15px; padding: 9px; }
+.cd-dot .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--w-accent); animation: breathe 4s ease-in-out infinite; }
+.cd-dot.near .dot { animation-duration: 2s; }
+@keyframes breathe { 50% { transform: scale(.6); opacity: .55; } }
+.cd-dot:hover .hint, .cd-dot:focus-visible .hint, .hints-always .cd-dot .hint { margin-right: 4px; }
+
+.cd-compass { position: relative; gap: 6px; opacity: 1; font-size: 20px; line-height: 1; }
+.cd-compass .emblem { position: relative; width: 30px; height: 30px; display: grid; place-items: center; }
+.cd-compass .cring { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(var(--w-accent) calc(var(--p, 1) * 1turn), var(--w-track) 0); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0); }
+.cd-compass .hint { color: var(--w-fg); }
+.layer .cd-compass { top: 50%; left: 50%; right: auto; transform: translate(-50%, -50%); background: var(--w-bg); border-radius: 18px; padding: 3px 8px; }
+
+/* Controls */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 14px; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 6px; }
+legend { padding: 0; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.chip span { display: block; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+.chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip input:disabled + span { opacity: .45; }
+.opt-note { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.recipe { font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--ink); background: var(--bg); border-radius: 6px; padding: 8px 10px; user-select: all; overflow-wrap: anywhere; }
+
+/* Side by side */
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 880px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.card.on { border-color: var(--accent); }
+.preview { position: relative; height: 110px; background: radial-gradient(70% 130% at 30% 20%, #3E3259, transparent 70%), var(--video); }
+.card-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tag-pick { font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 5px; padding: 1px 7px; }
+.card p { color: var(--muted); font-size: 14px; flex: 1; }
+.card .btn { align-self: flex-start; margin-top: 4px; }
+
+.same { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 28px; max-width: 900px; }
+@media (max-width: 640px) { .same { grid-template-columns: minmax(0, 1fr); } }
+.same b { display: block; font-weight: 600; }
+.same span { color: var(--muted); font-size: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .art, .cd, .cd-dot .dot { animation: none; }
+  .cd, .hint { transition: none; }
+}
+</style>
+
+<div class="wrap" id="app">
+  <header>
+    <h1>Countdown before the check-in</h1>
+    <p class="lede">A quiet 30-second warning before the feeling check-in. This mock page runs each option live. Click the countdown to open the check-in early.</p>
+  </header>
+
+  <section class="bench" aria-label="Live mockup">
+    <div class="bench-main">
+      <div class="stage" id="stage" data-yt="dark">
+        <div class="mast">
+          <div class="block mast-brand"></div>
+          <div class="mast-center">
+            <div class="block mast-search"></div>
+            <div class="mast-pill" id="compassSlot">🧭</div>
+          </div>
+          <div class="block mast-avatar"></div>
+        </div>
+        <div class="content">
+          <div>
+            <div class="player" id="player" role="button" tabindex="0" aria-label="Play or pause the sample video">
+              <div class="art"></div>
+              <div class="art-label">Sample video</div>
+              <div class="pctl"><span id="playGlyph" aria-hidden="true">❚❚</span><div class="pbar"><i id="pbar"></i></div><span id="ptime">6:58</span></div>
+              <div class="layer on-video" id="layerPlayer"></div>
+            </div>
+            <div class="below"><div class="block"></div><div class="block"></div></div>
+          </div>
+          <div class="side" aria-hidden="true" id="side"></div>
+          <div class="layer" id="layerPage"></div>
+        </div>
+        <div class="dlg" id="dlg" role="dialog" aria-label="Check-in" hidden>
+          <h4>How are you feeling?</h4>
+          <p>Check in with yourself after watching for a while.</p>
+          <div class="dlg-row">
+            <button type="button" style="background:var(--worse)">Worse</button>
+            <button type="button" style="background:var(--neutral)">Neutral</button>
+            <button type="button" style="background:var(--better)">Better</button>
+          </div>
+          <p class="dlg-note">Mockup: a click closes this. The real buttons need a 10-second hold.</p>
+        </div>
+      </div>
+      <div class="readline">
+        <span id="status">Video playing. Check-in in 0:30.</span>
+        <span id="event" role="status"></span>
+      </div>
+    </div>
+
+    <form class="panel" id="panel" onsubmit="return false" aria-label="Options">
+      <div class="acts">
+        <button type="button" class="btn" id="btnPlay">Pause video</button>
+        <button type="button" class="btn" id="btnRestart">Restart countdown</button>
+      </div>
+      <div id="groups" style="display:grid;gap:14px"></div>
+      <div style="display:grid;gap:6px">
+        <div class="recipe" id="recipe"></div>
+        <div class="acts"><button type="button" class="btn" id="btnCopy">Copy my choices</button></div>
+      </div>
+    </form>
+  </section>
+
+  <section aria-labelledby="looksTitle">
+    <h2 id="looksTitle">The six looks, side by side</h2>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section aria-labelledby="sameTitle">
+    <h2 id="sameTitle">The same in every option</h2>
+    <ul class="same">
+      <li><b>Starts at 7:00 of play</b><span>The check-in comes at 7:30, so the warning has its full 30 seconds.</span></li>
+      <li><b>Waits out a new video's first minute</b><span>The check-in holds during that minute, so the countdown starts only when zero will be on time.</span></li>
+      <li><b>Opens the same check-in</b><span>Early or on time, the video pauses and an answer needs the 10-second hold.</span></li>
+      <li><b>Watch pages only</b><span>It appears only where the tracker runs, and only when the tracker is on for that tab.</span></li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function () {
+  const $ = (s, r) => (r || document).querySelector(s);
+  const TOTAL = 30;
+
+  const fmt = s => {
+    const t = Math.max(0, Math.ceil(s));
+    return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  };
+
+  const hint = '<span class="hint">Check in now</span>';
+
+  const LOOKS = [
+    { id: 'A', name: 'Ring', pick: true, cls: 'cd-ring',
+      html: '<span class="dial"><svg viewBox="0 0 36 36" aria-hidden="true"><circle class="trk" cx="18" cy="18" r="15.9" pathLength="100"/><circle class="arc" cx="18" cy="18" r="15.9" pathLength="100"/></svg><span class="n"></span></span>' + hint,
+      note: 'A small ring drains around the seconds left. Compact, and the time is always readable.' },
+    { id: 'B', name: 'Pill', cls: 'cd-pill',
+      html: '<span>Check-in in <span class="t"></span></span>' + hint + '<span class="bar"></span>',
+      note: 'Words, a time and a thin bar. The easiest to understand, and the largest.' },
+    { id: 'C', name: 'Whisper', cls: 'cd-whisper',
+      html: '<span>check-in in <span class="n"></span></span>' + hint,
+      note: 'Plain text with no box. The lightest on the page, and the easiest to miss.' },
+    { id: 'D', name: 'Edge line', cls: 'cd-edge',
+      html: '<span class="line"></span><span class="tag"><span class="n"></span>' + hint + '</span>',
+      note: 'A thin line along the top edge shrinks toward the corner, with a small number under it.' },
+    { id: 'E', name: 'Breathing dot', cls: 'cd-dot',
+      html: '<span class="dot"></span><span class="hint"><span class="n"></span>s · Check in now</span>',
+      note: 'One slow pulsing dot. The time shows only when you hover, so it asks the least of you.' },
+    { id: 'F', name: 'Compass ring', cls: 'cd-compass',
+      html: '<span class="emblem"><span class="cring"></span>🧭</span><span class="hint"><span class="n"></span>s · Check in now</span>',
+      note: 'A ring fills around the 🧭. Adds nothing new to the page, but sits in the masthead and not a corner.' }
+  ];
+
+  const GROUPS = [
+    { key: 'look', label: 'Look', options: LOOKS.map(l => [l.id, l.id + ' ' + l.name]) },
+    { key: 'pos', label: 'Corner', options: [['player-tr', 'Player, top right'], ['player-tl', 'Player, top left'], ['page-tr', 'Page, top right']],
+      notes: {
+        'player-tr': 'Follows the player into theatre mode, and can show in fullscreen. Covers a small part of the picture.',
+        'player-tl': 'Follows the player too. The fullscreen title sits here, so the two can overlap.',
+        'page-tr': 'Sits over the sidebar and never covers the picture. Toasts use this corner, so they would need to move. May not show in fullscreen.'
+      } },
+    { key: 'pause', label: 'If the video pauses', options: [['stop', 'Countdown stops'], ['keep', 'Keeps counting']],
+      notes: {
+        stop: 'Matches the tracker, which counts only playing time.',
+        keep: 'It can reach zero while nothing is playing.'
+      } },
+    { key: 'near', label: 'Last 10 seconds', options: [['brighten', 'Brightens'], ['steady', 'Stays the same']] },
+    { key: 'hint', label: '"Check in now" label', options: [['hover', 'On hover'], ['always', 'Always shown']] },
+    { key: 'theme', label: 'YouTube theme', options: [['dark', 'Dark'], ['light', 'Light']] },
+    { key: 'speed', label: 'Speed of this mockup', options: [['1', 'Real time'], ['5', '5x']] }
+  ];
+
+  const state = { look: 'A', pos: 'player-tr', pause: 'stop', near: 'brighten', hint: 'hover', theme: 'dark', speed: '1' };
+  const app = $('#app'), stage = $('#stage'), player = $('#player'), dlg = $('#dlg');
+  const layerPage = $('#layerPage'), layerPlayer = $('#layerPlayer'), slot = $('#compassSlot');
+
+  let remaining = TOTAL, playing = true, dialogOpen = false, videoTime = 390 + 28, stageWidget = null;
+  let galleryRemaining = 24;
+  const galleryWidgets = [];
+
+  function build(look) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'cd ' + look.cls;
+    el.setAttribute('aria-label', 'Check in now');
+    el.innerHTML = look.html;
+    return el;
+  }
+
+  function paint(el, rem) {
+    el.style.setProperty('--p', Math.max(0, rem / TOTAL).toFixed(4));
+    const secs = String(Math.max(0, Math.ceil(rem)));
+    if (el.dataset.secs !== secs) {
+      el.dataset.secs = secs;
+      el.querySelectorAll('.n').forEach(n => { n.textContent = secs; });
+      el.querySelectorAll('.t').forEach(t => { t.textContent = fmt(rem); });
+    }
+    el.classList.toggle('near', state.near === 'brighten' && rem <= 10);
+  }
+
+  function mountStage() {
+    if (stageWidget) stageWidget.remove();
+    slot.textContent = '🧭';
+    const look = LOOKS.find(l => l.id === state.look);
+    stageWidget = build(look);
+    stageWidget.addEventListener('click', e => { e.stopPropagation(); openDialog(true); });
+
+    if (look.id === 'F') {
+      slot.textContent = '';
+      slot.appendChild(stageWidget);
+    } else {
+      const inPlayer = state.pos.startsWith('player');
+      const layer = inPlayer ? layerPlayer : layerPage;
+      layer.classList.toggle('pos-tl', state.pos === 'player-tl');
+      layer.appendChild(stageWidget);
+    }
+    stageWidget.hidden = dialogOpen && look.id !== 'F';
+    paint(stageWidget, remaining);
+  }
+
+  function setPlaying(next) {
+    playing = next;
+    player.classList.toggle('paused', !playing);
+    $('#playGlyph').textContent = playing ? '❚❚' : '▶';
+    $('#btnPlay').textContent = playing ? 'Pause video' : 'Play video';
+  }
+
+  function openDialog(early) {
+    if (dialogOpen) return;
+    dialogOpen = true;
+    setPlaying(false);
+    dlg.hidden = false;
+    if (stageWidget && state.look !== 'F') stageWidget.hidden = true;
+    $('#event').textContent = early ? 'Opened early with ' + fmt(remaining) + ' left.' : 'Reached zero.';
+  }
+
+  function restart(message) {
+    dialogOpen = false;
+    dlg.hidden = true;
+    remaining = TOTAL;
+    setPlaying(true);
+    mountStage();
+    $('#event').textContent = message || '';
+  }
+
+  dlg.querySelectorAll('.dlg-row button').forEach(b => {
+    b.addEventListener('click', () => restart('Answered. The next countdown starts after another 7:00 of play.'));
+  });
+
+  function togglePlay() {
+    if (dialogOpen) return;
+    setPlaying(!playing);
+  }
+  player.addEventListener('click', togglePlay);
+  player.addEventListener('keydown', e => {
+    if (e.target === player && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); togglePlay(); }
+  });
+  $('#btnPlay').addEventListener('click', togglePlay);
+  $('#btnRestart').addEventListener('click', () => restart(''));
+
+  // Controls
+  const groupsEl = $('#groups');
+  GROUPS.forEach(g => {
+    const fs = document.createElement('fieldset');
+    const options = g.options.map(([value, text]) => {
+      const id = 'opt-' + g.key + '-' + value;
+      const checked = state[g.key] === value ? ' checked' : '';
+      return '<label class="chip" for="' + id + '"><input type="radio" id="' + id + '" name="' + g.key + '" value="' + value + '"' + checked + '><span>' + text + '</span></label>';
+    }).join('');
+    fs.innerHTML = '<legend>' + g.label + '</legend><div class="chips">' + options + '</div>' + (g.notes ? '<p class="opt-note" id="note-' + g.key + '"></p>' : '');
+    fs.addEventListener('change', e => { set(g.key, e.target.value); });
+    groupsEl.appendChild(fs);
+  });
+
+  function labelOf(key) {
+    const g = GROUPS.find(x => x.key === key);
+    return g.options.find(o => o[0] === state[key])[1];
+  }
+
+  function refreshControls() {
+    GROUPS.forEach(g => {
+      if (g.notes) $('#note-' + g.key).textContent = g.notes[state[g.key]];
+      const input = $('#opt-' + g.key + '-' + state[g.key]);
+      if (input) input.checked = true;
+    });
+    const fixedPlace = state.look === 'F';
+    document.querySelectorAll('input[name="pos"]').forEach(i => { i.disabled = fixedPlace; });
+    if (fixedPlace) $('#note-pos').textContent = 'F stays on the 🧭. While it counts, a click on the 🧭 opens the check-in and not the status menu.';
+
+    const place = fixedPlace ? 'On the compass' : labelOf('pos');
+    $('#recipe').textContent = labelOf('look') + ' / ' + place + ' / Pause: ' + labelOf('pause') + ' / Last 10s: ' + labelOf('near') + ' / Label: ' + labelOf('hint');
+
+    document.querySelectorAll('.card').forEach(card => {
+      const on = card.dataset.look === state.look;
+      card.classList.toggle('on', on);
+      const b = $('.btn', card);
+      b.textContent = on ? 'On the mock page' : 'Try on the mock page';
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  function set(key, value) {
+    state[key] = value;
+    if (key === 'theme') stage.dataset.yt = value;
+    if (key === 'hint') app.classList.toggle('hints-always', value === 'always');
+    if (key === 'look' || key === 'pos') mountStage();
+    refreshControls();
+  }
+
+  // Gallery
+  const cards = $('#cards');
+  LOOKS.forEach(look => {
+    const card = document.createElement('article');
+    card.className = 'card';
+    card.dataset.look = look.id;
+    card.innerHTML =
+      '<div class="preview layer on-video"></div>' +
+      '<div class="card-body"><div class="card-head"><h3>' + look.id + ' · ' + look.name + '</h3>' +
+      (look.pick ? '<span class="tag-pick">My pick</span>' : '') + '</div>' +
+      '<p>' + look.note + '</p><button type="button" class="btn"></button></div>';
+    const widget = build(look);
+    widget.addEventListener('click', () => set('look', look.id));
+    $('.preview', card).appendChild(widget);
+    $('.btn', card).addEventListener('click', () => set('look', look.id));
+    galleryWidgets.push(widget);
+    paint(widget, galleryRemaining);
+    cards.appendChild(card);
+  });
+
+  // The fake side column
+  $('#side').innerHTML = Array.from({ length: 6 }, () =>
+    '<div class="side-row"><div class="block"></div><div class="side-text"><div class="block"></div><div class="block"></div></div></div>').join('');
+
+  $('#btnCopy').addEventListener('click', () => {
+    const text = $('#recipe').textContent;
+    const button = $('#btnCopy');
+    const done = message => { button.textContent = message; setTimeout(() => { button.textContent = 'Copy my choices'; }, 1800); };
+    try {
+      navigator.clipboard.writeText(text).then(() => done('Copied'), () => done('Select the text above to copy'));
+    } catch (e) {
+      done('Select the text above to copy');
+    }
+  });
+
+  // The clock
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.25, (now - last) / 1000) * Number(state.speed);
+    last = now;
+
+    if (!dialogOpen) {
+      if (playing || state.pause === 'keep') remaining -= dt;
+      if (playing) videoTime += dt;
+      if (remaining <= 0) { remaining = 0; openDialog(false); }
+    }
+    if (stageWidget) paint(stageWidget, remaining);
+
+    galleryRemaining -= dt;
+    if (galleryRemaining <= 0) galleryRemaining = TOTAL;
+    galleryWidgets.forEach(w => paint(w, galleryRemaining));
+
+    $('#pbar').style.setProperty('--prog', (videoTime / 720).toFixed(4));
+    $('#ptime').textContent = fmt(videoTime);
+    $('#status').textContent = dialogOpen
+      ? 'Video paused for the check-in.'
+      : (playing ? 'Video playing.' : 'Video paused.') + ' Check-in in ' + fmt(remaining) + '.';
+    requestAnimationFrame(frame);
+  }
+
+  mountStage();
+  refreshControls();
+  requestAnimationFrame(frame);
+})();
+</script>

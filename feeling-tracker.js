@@ -47,6 +47,9 @@ let initializeFeelingTracker = (function() {
     // until this much of the current video has gone by.
     const VIDEO_GRACE_MINUTES = 1;
     const PAUSE_ENFORCER_MS = 100;
+    const COUNTDOWN_MS = 30 * 1000;
+    const COUNTDOWN_NEAR_MS = 10 * 1000;
+    const COUNTDOWN_ID = 'sekhmet-ft-countdown';
     const STORAGE_KEY_PLAYTIME = 'sekhmet_accumulatedPlayTime';
     const STORAGE_KEY_LASTACTIVE = 'sekhmet_lastActiveTime';
     // Per-tab enable flag, held in the tab's own sessionStorage rather than in
@@ -367,16 +370,144 @@ let initializeFeelingTracker = (function() {
     //
     // The accumulator keeps running underneath: the dialog is deferred, not
     // cancelled, and fires as soon as the grace period is up.
-    function inVideoGracePeriod(video) {
-        if (currentVideoWatchMs < videoGraceMs) return true;
+    function videoGraceLeftMs(video) {
+        const byWatching = videoGraceMs - currentVideoWatchMs;
         // Position only counts on the way through the first time. A looping video
         // under a minute long never reaches 60s, so this clause would hold the
         // prompt off permanently rather than for the opening — a 45-second clip on
         // repeat would never ask, however many hours it ran.
-        if (video && video.loop) return false;
+        if (video && video.loop) return Math.max(0, byWatching);
         const position = video && video.currentTime;
-        return Number.isFinite(position) && position * 1000 < videoGraceMs;
+        const byPosition = Number.isFinite(position)
+            ? (videoGraceMs - position * 1000) / (video.playbackRate || 1)
+            : 0;
+        return Math.max(0, byWatching, byPosition);
     }
+
+    function inVideoGracePeriod(video) {
+        return videoGraceLeftMs(video) > 0;
+    }
+
+    // --- the warning before the check-in ----------------------------------------
+
+    function installCountdownStyle() {
+        const STYLE_ID = `${COUNTDOWN_ID}-style`;
+        if (document.getElementById(STYLE_ID)) return;
+
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = `
+            #${COUNTDOWN_ID} {
+                position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000;
+                display: inline-flex; align-items: center;
+                margin: 0; padding: 3px; border: 0; border-radius: 40px;
+                background: rgba(24, 25, 31, .66); color: #F4F2EC; cursor: pointer;
+                font: 500 13px Roboto, Arial, sans-serif; font-variant-numeric: tabular-nums;
+                opacity: .8; transition: opacity .4s ease;
+                animation: ${COUNTDOWN_ID}-in .7s ease backwards;
+            }
+            @keyframes ${COUNTDOWN_ID}-in { from { opacity: 0; } }
+            #${COUNTDOWN_ID}:hover, #${COUNTDOWN_ID}:focus-visible, #${COUNTDOWN_ID}.near { opacity: 1; }
+            #${COUNTDOWN_ID} .dial { position: relative; width: 72px; height: 72px; display: grid; place-items: center; font-size: 26px; }
+            #${COUNTDOWN_ID} svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+            #${COUNTDOWN_ID} circle { fill: none; stroke-width: 3; }
+            #${COUNTDOWN_ID} .track { stroke: rgba(255, 255, 255, .2); }
+            #${COUNTDOWN_ID} .arc {
+                stroke: #F3C77F; stroke-linecap: round; stroke-dasharray: 100;
+                stroke-dashoffset: calc(100 * (1 - var(--left, 1)));
+                transition: stroke-dashoffset 1s linear;
+            }
+            #${COUNTDOWN_ID}.near .arc { stroke: #FFD99A; }
+            #${COUNTDOWN_ID} .hint {
+                display: inline-block; max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+                font-size: 12px; transition: max-width .25s ease, opacity .25s ease, margin .25s ease;
+            }
+            #${COUNTDOWN_ID}:hover .hint, #${COUNTDOWN_ID}:focus-visible .hint {
+                max-width: 150px; opacity: 1; margin: 0 10px 0 6px;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #${COUNTDOWN_ID}, #${COUNTDOWN_ID} .arc, #${COUNTDOWN_ID} .hint { animation: none; transition: none; }
+            }
+        `;
+        (document.head || document.documentElement).appendChild(style);
+    }
+
+    function buildCountdown() {
+        installCountdownStyle();
+
+        const el = document.createElement('button');
+        el.id = COUNTDOWN_ID;
+        el.type = 'button';
+        el.setAttribute('aria-label', 'Check in now');
+        el.innerHTML = `
+            <span class="dial">
+                <svg viewBox="0 0 36 36" aria-hidden="true">
+                    <circle class="track" cx="18" cy="18" r="15.9" pathLength="100"></circle>
+                    <circle class="arc" cx="18" cy="18" r="15.9" pathLength="100"></circle>
+                </svg>
+                <span class="seconds"></span>
+            </span>
+            <span class="hint">Check in now</span>
+        `;
+
+        // Inside the player, where a click would otherwise also play or pause the
+        // video and a double click would go fullscreen.
+        ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'dblclick'].forEach(type => {
+            el.addEventListener(type, event => event.stopPropagation());
+        });
+        el.addEventListener('click', event => {
+            event.stopPropagation();
+            showFeelingTrackerDialog();
+        });
+        return el;
+    }
+
+    function hideCountdown() {
+        const el = document.getElementById(COUNTDOWN_ID);
+        if (el) el.remove();
+    }
+
+    // Driven only from the play-time tick, and from the same numbers that decide
+    // the check-in, so it stops when the video pauses and cannot disagree with
+    // the dialog. Grace counts too: during a new video's opening the check-in is
+    // held back, and a countdown that ignored that would reach zero and sit there.
+    function updateCountdown(video) {
+        if (document.getElementById('feeling-dialog')) {
+            hideCountdown();
+            return;
+        }
+
+        const msLeft = Math.max(checkIntervalMs - accumulatedPlayTime, videoGraceLeftMs(video));
+        const player = document.getElementById('movie_player');
+        // A video too short to play past the opening never clears the grace
+        // period, so a countdown there would stop partway and nothing would come.
+        const tooShort = !video.loop && Number.isFinite(video.duration)
+            && video.duration * 1000 < videoGraceMs;
+        if (!player || tooShort || msLeft <= 0 || msLeft > COUNTDOWN_MS) {
+            hideCountdown();
+            return;
+        }
+
+        const el = document.getElementById(COUNTDOWN_ID) || buildCountdown();
+        // Inside the player rather than on the page, so it follows theatre mode
+        // and stays visible in fullscreen. YouTube can also swap the player.
+        if (el.parentElement !== player) player.appendChild(el);
+
+        el.style.setProperty('--left', String(msLeft / COUNTDOWN_MS));
+        el.querySelector('.seconds').textContent = String(Math.ceil(msLeft / 1000));
+        el.classList.toggle('near', msLeft <= COUNTDOWN_NEAR_MS);
+    }
+
+    // Anything outside the fullscreen element cannot paint over it, which would
+    // leave the video paused with nothing on screen to say why.
+    function placeFeelingDialog(dialog) {
+        (document.fullscreenElement || document.body).appendChild(dialog);
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+        const dialog = document.getElementById('feeling-dialog');
+        if (dialog) placeFeelingDialog(dialog);
+    });
 
     async function showFeelingTrackerDialog({ debug: isDebug = false } = {}) {
         // Guarded here rather than at each caller: the status menu's debug
@@ -388,6 +519,8 @@ let initializeFeelingTracker = (function() {
             log('Ignoring feeling dialog request: not a watch page');
             return;
         }
+
+        hideCountdown();
 
         const v = getLiveVideoElement();
         if (v && !v.paused) {
@@ -408,7 +541,9 @@ let initializeFeelingTracker = (function() {
         dialog.style.backgroundColor = 'white';
         dialog.style.padding = '20px';
         dialog.style.borderRadius = '8px';
-        dialog.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+        // The second shadow dims the page. As part of the dialog it goes away with
+        // it, whichever of the places that remove the dialog gets there.
+        dialog.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2), 0 0 0 100vmax rgba(0, 0, 0, 0.7)';
         dialog.style.zIndex = '9999';
         dialog.style.width = '300px';
         dialog.style.textAlign = 'center';
@@ -423,7 +558,14 @@ let initializeFeelingTracker = (function() {
       </div>
     `;
 
-        document.body.appendChild(dialog);
+        // In fullscreen this can land inside the player, which hides its cursor when
+        // idle and acts on clicks. Only these two are stopped: the hold buttons
+        // listen for their own presses on the buttons themselves.
+        dialog.style.cursor = 'default';
+        ['click', 'dblclick'].forEach(type => {
+            dialog.addEventListener(type, event => event.stopPropagation());
+        });
+        placeFeelingDialog(dialog);
 
         let holdTime = isDebug ? 1000 : 10000;
         let sharedProgress = { accumulated: 0 };
@@ -509,10 +651,12 @@ let initializeFeelingTracker = (function() {
         // Set an interval to periodically check accumulated play time
         checkTimer = setInterval(() => {
             // Start the grace clock over as soon as the URL names a different
-            // video — or no video at all, so returning to the feed and picking
-            // something new never inherits the last video's credit.
+            // video. Passing through no video at all is not a change: the
+            // miniplayer leaves the watch page, and coming back out of it to the
+            // same video must not hand that video a fresh grace period. Picking
+            // something new from the feed still names a different id.
             const videoId = currentVideoIdFromUrl();
-            if (videoId !== currentVideoId) {
+            if (videoId && videoId !== currentVideoId) {
                 currentVideoId = videoId;
                 currentVideoWatchMs = 0;
             }
@@ -528,8 +672,13 @@ let initializeFeelingTracker = (function() {
             // would count it.
             if (!isWatchPage()) {
                 lastPlayTimestamp = null;
+                hideCountdown();
                 return;
             }
+
+            // Out here rather than in the disabled branch below, which a paused
+            // video never reaches.
+            if (!readEnabled()) hideCountdown();
 
             // Re-query rather than trusting the cached element: YouTube can
             // swap the <video> across SPA navigation, and a detached one never
@@ -569,12 +718,17 @@ let initializeFeelingTracker = (function() {
                     if (accumulatedPlayTime >= checkIntervalMs && !inVideoGracePeriod(video)) {
                         showFeelingTrackerDialog();
                     }
+                    updateCountdown(video);
 
                     // Only log every 5 seconds to reduce console spam
                     if (Math.round(accumulatedPlayTime / 1000) % 5 === 0) {
                         log(`Accumulated play time across all videos: ${Math.round(accumulatedPlayTime / 1000)} seconds`);
                     }
                 });
+            } else if (video && readEnabled()) {
+                // No clock moves here, so the ring holds still, but it should
+                // still go away if a session timeout or a new video changes the sums.
+                updateCountdown(video);
             }
         }, 1000); // Check every second
     }

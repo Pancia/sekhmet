@@ -62,7 +62,7 @@ browser, not in this repo.
 - `polyfill.js`: Cross-browser API compatibility layer (Mozilla's webextension-polyfill)
 - `lib.js`: Shared utilities and helpers
 - `ytdl.js`: Video download functionality
-- `feeling-tracker.js`: YouTube watch time tracking and mood prompts
+- `feeling-tracker.js`: YouTube watch time tracking and mood prompts. A ring at the top middle of the player counts down the last 30 seconds of playing time before a prompt, and clicking it opens the prompt early
 - `overlays.js`: Content overlay functionality
 - `loop.js`: Per-video loop that survives reloads - toggled with `Shift+L` or from the 🧭 menu, where switching it on also offers start and end times to loop only part of the video (typed, clicked or dragged on a timeline, or taken from the playhead; the range holds only while playing, so a paused playhead can be dragged outside it to pick a new one, and it is ignored during ads). Stored permanently in `storage.local` under `sekhmet_loopedVideos` (clear it wholesale with `browser.storage.local.remove('sekhmet_loopedVideos')`, since there is no settings page yet)
 - `youtube.js`: YouTube-specific functionality
