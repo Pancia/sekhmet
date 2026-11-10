@@ -210,5 +210,181 @@ async function boot(href, storeSeed) {
         ok('and the user was told',                /this page only/.test(H.lastToast().text));
     }
 
+    group('reading and writing times');
+    {
+        await boot(`${YT}/watch?v=AAA`);
+        ok('plain seconds',       YTELoop.parseTime('90') === 90);
+        ok('minutes:seconds',     YTELoop.parseTime('1:30') === 90);
+        ok('hours',               YTELoop.parseTime('1:02:03') === 3723);
+        ok('tenths',              YTELoop.parseTime('1:30.5') === 90.5);
+        ok('blank is null',       YTELoop.parseTime('  ') === null);
+        ok('garbage is NaN',      Number.isNaN(YTELoop.parseTime('abc')));
+        ok('1:75 is NaN',         Number.isNaN(YTELoop.parseTime('1:75')));
+        ok('formats under an hour', YTELoop.formatTime(90) === '1:30');
+        ok('pads seconds',        YTELoop.formatTime(65) === '1:05');
+        ok('formats hours',       YTELoop.formatTime(3723) === '1:02:03');
+        ok('keeps tenths',        YTELoop.formatTime(90.5) === '1:30.5');
+        ok('rounding carries',    YTELoop.formatTime(59.96) === '1:00');
+    }
+
+    group('a range has to make sense before it is saved');
+    {
+        await boot(`${YT}/watch?v=AAA`);
+        const bad = (s, e, d) => YTELoop.rangeProblem(s, e, d) !== null;
+        ok('a good range passes',        !bad(10, 20, 600));
+        ok('blank end passes',           !bad(10, null, 600));
+        ok('blank start passes',         !bad(null, 20, 600));
+        ok('unreadable start refused',   bad(NaN, 20, 600));
+        ok('unreadable end refused',     bad(10, NaN, 600));
+        ok('backwards refused',          bad(20, 10, 600));
+        ok('equal refused',              bad(10, 10, 600));
+        ok('too short refused',          bad(10, 10.5, 600));
+        ok('past the video refused',     bad(10, 700, 600));
+        ok('start past the video refused', bad(700, null, 600));
+        ok('unknown duration is not a refusal', !bad(10, 700, NaN));
+        ok('blank end with no room refused',    bad(599.9, null, 600));
+        ok('blank end with room passes',        !bad(598, null, 600));
+        ok('exactly the minimum passes despite float error', !bad(3.1, 4.1, 600));
+    }
+
+    group('the range is kept with the remembered loop');
+    {
+        const v = await boot(`${YT}/watch?v=AAA`);
+        ok('no range without a loop', await YTELoop.setRange(5, 10) === false);
+
+        YTELoop.toggle(); await tick(); await tick();
+        ok('saved', await YTELoop.setRange(5, 10) === true);
+        ok('stored with the entry', H.store['sekhmet_loopedVideos'].AAA.start === 5
+            && H.store['sekhmet_loopedVideos'].AAA.end === 10);
+        ok('reads back', YTELoop.getRange().end === 10);
+        ok('labelled for the menu', YTELoop.rangeLabel() === '0:05 – 0:10');
+        ok('still looping', v.loop === true);
+
+        await YTELoop.setRange(0, null);
+        ok('the whole video is a plain entry again', typeof H.store['sekhmet_loopedVideos'].AAA === 'number');
+        ok('and has no range', YTELoop.getRange() === null);
+
+        await YTELoop.setRange(5, 10);
+        YTELoop.toggle(); await tick(); await tick();
+        ok('switching off forgets the range', !('AAA' in H.store['sekhmet_loopedVideos']));
+        YTELoop.toggle(); await tick(); await tick();
+        ok('switching on again is the whole video', YTELoop.getRange() === null);
+    }
+
+    group('a stored range survives a reload and a malformed one does not load');
+    {
+        const v = await boot(`${YT}/watch?v=AAA`, {
+            AAA: { at: 111, start: 5, end: 10 },
+            BAD: { at: 111, start: 'x', end: 10 }
+        });
+        ok('restored',         YTELoop.getRange().start === 5);
+        ok('asserted looping', v.loop === true);
+
+        H.nav(`${YT}/watch?v=BAD`);
+        ok('bad entry ignored', YTELoop.isRemembered() === false);
+    }
+
+    group('playback stays inside the range');
+    {
+        const v = await boot(`${YT}/watch?v=AAA`, { AAA: { at: 111, start: 5, end: 10 } });
+        const at = t => { v.currentTime = t; H.dispatch('timeupdate', v); return v.currentTime; };
+
+        ok('inside is left alone',            at(7) === 7);
+        ok('past the end goes back to start', at(10.1) === 5);
+        ok('before the start is pulled in',   at(1) === 5);
+        ok('a landing just short is not re-sought', at(4.9) === 4.9);
+
+        v.paused = true;
+        ok('a paused playhead can leave the range', at(30) === 30);
+        v.paused = false;
+        ok('pressing play from there comes back',   at(30) === 5);
+
+        v.adShowing = true;
+        ok('an ad is never seeked', at(30) === 30);
+        v.adShowing = false;
+
+        const other = H.newVideo('preview');
+        other.currentTime = 30;
+        H.dispatch('timeupdate', other);
+        ok('other videos are left alone', other.currentTime === 30);
+    }
+
+    group('the end is hit between timeupdates');
+    {
+        const v = await boot(`${YT}/watch?v=AAA`, { AAA: { at: 111, start: 5, end: 10 } });
+        v.currentTime = 9.95;
+        H.dispatch('timeupdate', v);
+        v.currentTime = 10;
+        await new Promise(r => setTimeout(r, 80));
+        ok('the timer took the last step', v.currentTime === 5);
+    }
+
+    group('the range belongs to its video');
+    {
+        const v = await boot(`${YT}/watch?v=AAA`, { AAA: { at: 111, start: 5, end: 10 } });
+
+        H.nav(`${YT}/`);                                 // miniplayer keeps the element
+        H.dispatch('loadedmetadata', v);
+        v.currentTime = 30;
+        H.dispatch('timeupdate', v);
+        ok('still held in the miniplayer', v.currentTime === 5);
+
+        H.nav(`${YT}/watch?v=BBB`);
+        H.dispatch('loadstart', v);
+        v.currentTime = 30;
+        H.dispatch('timeupdate', v);
+        ok('not applied to the next video', v.currentTime === 30);
+    }
+
+    group('a different video in the miniplayer drops the loop and the range');
+    {
+        const v = await boot(`${YT}/watch?v=AAA`, { AAA: { at: 111, start: 5, end: 10 } });
+
+        H.nav(`${YT}/`);
+        H.dispatch('loadedmetadata', v);                 // same video, reloaded
+        ok('the same video keeps looping', v.loop === true);
+
+        v.adShowing = true;
+        v.duration = 15;
+        H.dispatch('loadedmetadata', v);
+        ok('an ad is not a different video', v.loop === true);
+        v.adShowing = false;
+
+        v.duration = 245;
+        H.dispatch('loadstart', v);
+        H.dispatch('loadedmetadata', v);
+        ok('the flag comes off', v.loop === false);
+        v.currentTime = 30;
+        H.dispatch('timeupdate', v);
+        ok('the range is not applied', v.currentTime === 30);
+    }
+
+    group("another video's timeupdate leaves the end timer alone");
+    {
+        const v = await boot(`${YT}/watch?v=AAA`, { AAA: { at: 111, start: 5, end: 10 } });
+        v.currentTime = 9.95;
+        H.dispatch('timeupdate', v);
+        H.dispatch('timeupdate', H.newVideo('preview'));
+        v.currentTime = 10;
+        await new Promise(r => setTimeout(r, 80));
+        ok('the timer still fired', v.currentTime === 5);
+    }
+
+    group('a start saved with no room to play is ignored');
+    {
+        const v = await boot(`${YT}/watch?v=AAA`, { AAA: { at: 111, start: 599.9, end: null } });
+        v.currentTime = 10;
+        H.dispatch('timeupdate', v);
+        ok('no seek', v.currentTime === 10);
+    }
+
+    group('a whole-video loop never seeks');
+    {
+        const v = await boot(`${YT}/watch?v=AAA`, { AAA: 111 });
+        v.currentTime = 30;
+        H.dispatch('timeupdate', v);
+        ok('left alone', v.currentTime === 30);
+    }
+
     done();
 })();

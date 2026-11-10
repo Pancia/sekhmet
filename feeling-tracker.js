@@ -851,6 +851,10 @@ let initializeFeelingTracker = (function() {
         panel.style.padding = "30px";
         panel.style.width = "480px";
         panel.style.maxWidth = "90%";
+        // The loop fields make this taller than a laptop screen.
+        panel.style.maxHeight = "90vh";
+        panel.style.overflowY = "auto";
+        panel.style.boxSizing = "border-box";
         panel.style.color = "#333";
 
         const title = document.createElement("h2");
@@ -871,7 +875,7 @@ let initializeFeelingTracker = (function() {
             const loopRow = loop === null
                 ? { value: "n/a", color: "#333" }
                 : loop
-                    ? { value: "Remembered", color: "#4CAF50" }
+                    ? { value: YTELoop.rangeLabel() || "Remembered", color: "#4CAF50" }
                     : { value: "Off", color: "#333" };
             return [
                 { label: "Extension context", value: info.contextValid ? "Valid" : "Lost", color: info.contextValid ? "#4CAF50" : "#F44336" },
@@ -912,7 +916,18 @@ let initializeFeelingTracker = (function() {
         }
 
         renderRows();
-        const dialogRefreshInterval = setInterval(renderRows, 1000);
+        // The video can change under an open menu (Back, autoplay), and another tab
+        // can change the loop. This says which state the loop controls were drawn for.
+        let renderedLoopState = null;
+        function currentLoopState() {
+            const key = typeof YTELoop === 'undefined' || !YTELoop ? null : YTELoop.currentKey();
+            return `${key}/${loopState()}`;
+        }
+
+        const dialogRefreshInterval = setInterval(() => {
+            renderRows();
+            if (currentLoopState() !== renderedLoopState) renderLoopControls();
+        }, 1000);
 
         function closeDialog() {
             clearInterval(dialogRefreshInterval);
@@ -944,26 +959,42 @@ let initializeFeelingTracker = (function() {
         // menu: that one lasts as long as the page does, and this is the switch
         // that is actually remembered.
         const loopBtn = document.createElement("button");
-        const loopOn = loopState();
-        loopBtn.textContent = loopOn === null
-            ? "No video on this page to loop"
-            : loopOn ? "🔁 Stop looping this video" : "🔁 Loop this video (remembered)";
         loopBtn.style.display = "block";
         loopBtn.style.width = "100%";
         loopBtn.style.padding = "14px";
         loopBtn.style.marginTop = "10px";
         loopBtn.style.border = "none";
         loopBtn.style.borderRadius = "6px";
-        loopBtn.style.backgroundColor = loopOn === null ? "#9E9E9E" : loopOn ? "#F44336" : "#673AB7";
         loopBtn.style.color = "white";
-        loopBtn.style.cursor = loopOn === null ? "default" : "pointer";
         loopBtn.style.fontSize = "18px";
-        loopBtn.disabled = loopOn === null;
+
+        // The dialog stays open across the toggle, because switching the loop on
+        // is what reveals the start and end fields.
+        const loopRange = document.createElement("div");
+
+        function renderLoopControls() {
+            renderedLoopState = currentLoopState();
+            const loopOn = loopState();
+            loopBtn.textContent = loopOn === null
+                ? "No video on this page to loop"
+                : loopOn ? "🔁 Stop looping this video" : "🔁 Loop this video (remembered)";
+            loopBtn.style.backgroundColor = loopOn === null ? "#9E9E9E" : loopOn ? "#F44336" : "#673AB7";
+            loopBtn.style.cursor = loopOn === null ? "default" : "pointer";
+            loopBtn.disabled = loopOn === null;
+
+            loopRange.textContent = "";
+            if (loopOn) loopRange.appendChild(YTELoop.rangeControls());
+        }
+
         loopBtn.addEventListener("click", () => {
-            YTELoop.toggle();
-            closeDialog();
+            // Never act on a label that described some other video.
+            if (currentLoopState() === renderedLoopState) YTELoop.toggle();
+            renderLoopControls();
+            renderRows();
         });
+        renderLoopControls();
         panel.appendChild(loopBtn);
+        panel.appendChild(loopRange);
 
         // Trigger dialog button
         const triggerBtn = document.createElement("button");
@@ -1001,8 +1032,14 @@ let initializeFeelingTracker = (function() {
         panel.appendChild(closeBtn);
 
         backdrop.appendChild(panel);
+        // A press inside the panel and a release out here also reports a click on
+        // the backdrop, which is what selecting text in a field looks like.
+        let pressStartedOnBackdrop = false;
+        backdrop.addEventListener("mousedown", (e) => {
+            pressStartedOnBackdrop = e.target === backdrop;
+        });
         backdrop.addEventListener("click", (e) => {
-            if (e.target === backdrop) closeDialog();
+            if (e.target === backdrop && pressStartedOnBackdrop) closeDialog();
         });
         document.body.appendChild(backdrop);
     }

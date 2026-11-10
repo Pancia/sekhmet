@@ -49,7 +49,19 @@ exports.otherTabWrote = (key, newValue) => {
 };
 
 class HTMLVideoElement {
-    constructor(tag) { this.loop = false; this.tag = tag; }
+    constructor(tag) {
+        this.loop = false;
+        this.tag = tag;
+        this.paused = false;
+        this.currentTime = 0;
+        this.duration = 600;
+        this.playbackRate = 1;
+        this.adShowing = false;
+    }
+    // Only ever asked for the player root, and only to read its ad-showing class.
+    closest() {
+        return { classList: { contains: c => c === 'ad-showing' && this.adShowing } };
+    }
 }
 global.HTMLVideoElement = HTMLVideoElement;
 exports.newVideo = tag => new HTMLVideoElement(tag);
@@ -150,6 +162,8 @@ exports.reset = () => {
     Object.keys(store).forEach(k => delete store[k]);
     pendingWait = null;
     observers.length = 0;
+    onChangedCbs.length = 0;
+    Object.keys(docListeners).forEach(type => delete docListeners[type]);
     readFails = false;
     writeFails = false;
     global.browser.runtime.id = 'test';
