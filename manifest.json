@@ -46,6 +46,12 @@
             "all_frames": false
         },
         {
+            "matches": ["*://x.com/*"],
+            "css": ["x.css"],
+            "js": ["polyfill.js", "lib.js", "overlays.js", "x.js", "x-sidebar.js"],
+            "all_frames": false
+        },
+        {
             "matches": ["*://watch.thechosen.tv/*"],
             "js": ["polyfill.js", "lib.js", "thechosen.js"],
             "run_at": "document_end",

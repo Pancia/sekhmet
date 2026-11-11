@@ -1,0 +1,64 @@
+/* x.com: the right-hand sidebar (search, trends, who to follow) is hidden until
+   asked for. A stylesheet rather than a script so it is in place before X's
+   first render - from a content script the sidebar would flash in and then out.
+   x-sidebar.js only flips the attribute and draws the toggle. */
+
+html:not([data-sekhmet-sidebar="shown"]) [data-testid="sidebarColumn"] {
+    display: none !important;
+}
+
+/* The timeline and the sidebar share a flex row spread with space-between, so
+   with the sidebar gone the timeline would sit hard left of an empty space. Auto
+   margins centre a flex item whatever the row's own justify-content says.
+   Centred, not widened: the 600px is enforced by more than this one element,
+   and the media inside is sized against it. */
+html:not([data-sekhmet-sidebar="shown"]) [data-testid="primaryColumn"] {
+    margin-inline: auto !important;
+}
+
+/* A tab on the right edge, clear of the search box at the top of the sidebar
+   and the message and Grok drawers in the bottom corner. Only where there is a
+   sidebar to toggle - X drops it at narrow widths and on some pages. */
+#sekhmet-x-sidebar-toggle {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    z-index: 2147483000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 104px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-right: none;
+    border-radius: 12px 0 0 12px;
+    background: rgba(15, 20, 25, 0.85);
+    color: #fff;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.15s ease, width 0.15s ease;
+}
+
+#sekhmet-x-sidebar-toggle:hover,
+#sekhmet-x-sidebar-toggle:focus-visible {
+    opacity: 1;
+    width: 46px;
+}
+
+/* Drawn as "show" (pointing left, the way the sidebar comes in) and turned
+   round once it is open. */
+#sekhmet-x-sidebar-toggle svg {
+    width: 26px;
+    height: 26px;
+    transition: transform 0.15s ease;
+}
+
+#sekhmet-x-sidebar-toggle[aria-pressed="true"] svg {
+    transform: scaleX(-1);
+}
+
+html:not(:has([data-testid="sidebarColumn"])) #sekhmet-x-sidebar-toggle {
+    display: none;
+}

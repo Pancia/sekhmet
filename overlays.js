@@ -111,6 +111,28 @@ let initializeOverlays = (function() {
                 }
             ]
         },
+        "x.com": {
+            overlays: [
+                {
+                    // x.js decides which rows are replies and tags them; the
+                    // engine only ever sees the tag. primaryColumn is the logged-in
+                    // build's container, the conversation id the logged-out one's.
+                    pathPattern: /^\/[^/]+\/status\/\d+/,
+                    selector: '[data-testid="primaryColumn"], [id^="urt:conversation:"]',
+                    itemSelector: ".sekhmet-x-reply",
+                    individual: true,
+                    itemName: "replies",
+                    adjacentRevealCount: 2,
+                    holdTime: 3000,
+                    blurEffect: true,
+                    waitFor: true,
+                    // The list is virtualized, so a revealed row is soon a
+                    // destroyed one. x.js keeps the reveal by post id and puts it
+                    // back on whichever element shows that post next.
+                    onReveal: item => XReplies.remember(item)
+                }
+            ]
+        },
         // Both, because the manifest matches the bare host and its subdomains
         // and this lookup is an exact match on location.host.
         "openfront.io": OPENFRONT_OVERLAY,
@@ -179,7 +201,7 @@ let initializeOverlays = (function() {
     }
 
     // itemName is a plural collective; the button talks about one of them.
-    const ITEM_TYPES = { comments: 'comment', videos: 'video', rows: 'row' };
+    const ITEM_TYPES = { comments: 'comment', videos: 'video', rows: 'row', replies: 'reply' };
 
     function revealLabel(itemName, adjacentRevealCount) {
         const itemType = ITEM_TYPES[itemName] || 'item';
@@ -222,6 +244,14 @@ let initializeOverlays = (function() {
         if (pending.length) {
             log(`[DEBUG] Tore down ${pending.length} page-scoped resources`);
         }
+    }
+
+    // An item's overlay comes off for good once revealed. onReveal is for pages
+    // that destroy and rebuild their items, where the class alone would be lost
+    // with the element.
+    function markRevealed(item, config) {
+        item.classList.add('revealed');
+        if (config.onReveal) { config.onReveal(item); }
     }
 
     // Items nest - a comment thread's replies are threads in their own right - so
@@ -470,7 +500,7 @@ let initializeOverlays = (function() {
                                 adjacentOverlay.remove();
                             }
                             // Always mark as revealed to prevent re-adding overlay
-                            adjacentItem.classList.add('revealed');
+                            markRevealed(adjacentItem, config);
                         }
                     }
                 };
@@ -478,7 +508,7 @@ let initializeOverlays = (function() {
                 removeAdjacentOverlays(currentIndex, 1, adjacentRevealCount);  // Remove below
 
                 // Always mark as revealed to prevent re-adding overlay
-                item.classList.add('revealed');
+                markRevealed(item, config);
 
                 log(`Revealed ${itemName} item at index ${currentIndex} and adjacent items`);
             });
@@ -593,7 +623,7 @@ let initializeOverlays = (function() {
                                     adjacentOverlay.remove();
                                 }
                                 // Always mark as revealed to prevent re-adding overlay
-                                adjacentItem.classList.add('revealed');
+                                markRevealed(adjacentItem, config);
                             }
                         }
                     };
@@ -601,7 +631,7 @@ let initializeOverlays = (function() {
                     removeAdjacentOverlays(currentIndex, 1, adjacentRevealCount);
 
                     // Always mark as revealed to prevent re-adding overlay
-                    item.classList.add('revealed');
+                    markRevealed(item, config);
 
                     log(`Revealed ${itemName} item at index ${currentIndex} and adjacent items`);
                 });
