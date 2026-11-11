@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Tell a running, unpacked Sekhmet to reload itself.
+
+Usage: native-host/reload-extension [changed files...]
+
+The files are only logged in the extension's background console. No tab is
+refreshed: each loaded tab offers to reload itself (lib.js,
+watchForExtensionReload), as after the Reload button on brave://extensions.
+"""
+
+import errno
+import json
+import os
+import sys
+from pathlib import Path
+
+FIFO = Path.home() / ".local" / "share" / "sekhmet" / "reload.fifo"
+REPO = Path(__file__).resolve().parent.parent
+
+
+def main():
+    # As the manifest names them, whatever form they were given in.
+    files = [os.path.relpath(Path(f).resolve(), REPO) for f in sys.argv[1:]]
+    try:
+        # Non-blocking, so no listener is an error now rather than a hang.
+        fd = os.open(FIFO, os.O_WRONLY | os.O_NONBLOCK)
+    except OSError as e:
+        if e.errno in (errno.ENXIO, errno.ENOENT):
+            print("Sekhmet is not listening: is the browser open with the unpacked "
+                  "extension, and has native-host/install.sh been run since "
+                  "com.sekhmet.dev_reload was added?", file=sys.stderr)
+            sys.exit(1)
+        raise
+    with os.fdopen(fd, "w") as pipe:
+        pipe.write(json.dumps({"files": files}) + "\n")
+    print("Reload sent" + (f" ({', '.join(files)})" if files else ""))
+
+
+if __name__ == "__main__":
+    main()

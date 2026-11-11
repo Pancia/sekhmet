@@ -356,6 +356,69 @@ function showToast(message, options) {
     return handle;
 }
 
+// After Sekhmet is reloaded - the Reload button on brave://extensions, or
+// native-host/reload-extension - the scripts already in an open tab keep
+// running, cut off from the extension, and Brave puts the new ones in only when
+// the tab loads again. So each tab holds a port open to the background page.
+// The port closes when that page goes away, and the tab then shows a toast that
+// reloads it on a click. Nothing reloads a tab by itself: refreshing every
+// matching tab once loaded about 1,290 sleeping tabs at once.
+//
+// A sleeping tab runs no script, so it shows nothing; it gets the new scripts
+// when it loads. The code that shows the toast is the old one, so this starts
+// working one reload after it is first installed.
+(function watchForExtensionReload() {
+    const rt = typeof chrome !== "undefined" && chrome.runtime;
+    if (!rt || !rt.id || typeof rt.connect !== "function" || typeof document === "undefined") return;
+    if (window.__sekhmetReloadWatch) return;
+    window.__sekhmetReloadWatch = true;
+    const { log } = initLogger("reload-watch");
+
+    function offer() {
+        log("Sekhmet was reloaded; offering to reload this tab");
+        const toast = showToast("Sekhmet was updated", {
+            status: "info", icon: "🔄", timeout: 0, detail: "Click to reload this tab"
+        });
+        // showToast's own click handler dismisses; this one reloads as well.
+        toast.element.addEventListener("click", () => location.reload());
+        const close = document.createElement("span");
+        close.textContent = "✕";
+        close.title = "Close without reloading";
+        Object.assign(close.style, { flex: "0 0 auto", marginLeft: "4px", opacity: "0.6", fontSize: "12px" });
+        close.addEventListener("click", e => { e.stopPropagation(); toast.dismiss(); });
+        toast.element.appendChild(close);
+        // Half as big again as the other toasts, so it is seen.
+        toast.element.style.zoom = "1.5";
+    }
+
+    function connect() {
+        let port;
+        try {
+            port = rt.connect({ name: "sekhmet-reload-watch" });
+        } catch (e) {
+            // Thrown when the extension is already gone.
+            if (!rt.id) offer();
+            return;
+        }
+        const openedAt = Date.now();
+        port.onDisconnect.addListener(() => {
+            void rt.lastError;   // read, so it is not logged as unchecked
+            // A moment for the browser to mark this script as cut off.
+            setTimeout(() => {
+                if (!rt.id) { offer(); return; }
+                // Still a live Sekhmet: the port closed for another reason, such
+                // as the page entering the back-forward cache. Open it again -
+                // but not if it closed at once, which means no listener: a quick
+                // retry would then spin.
+                if (Date.now() - openedAt > 5000) connect();
+                else log("port closed at once; not watching for reloads in this tab");
+            }, 500);
+        });
+    }
+
+    connect();
+})();
+
 function initPressAndHoldPlugin() {
     const pressAndHold = "pressAndHold";
     const defaults = {

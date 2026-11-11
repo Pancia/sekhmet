@@ -25,7 +25,7 @@
         }
     },
     "background": {
-        "scripts": ["polyfill.js", "background.js"]
+        "scripts": ["polyfill.js", "background.js", "dev-reload.js"]
     },
     "permissions": ["storage", "unlimitedStorage", "tabs", "contextMenus", "nativeMessaging", "activeTab"],
     "content_scripts": [

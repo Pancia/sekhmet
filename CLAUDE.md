@@ -4,15 +4,21 @@ Manifest V2 extension, installed unpacked in **Brave** (not Chrome).
 
 - Tests: see README "Tests". `node test/run.js` and `node test/check.js`;
   run both before saying a change is done.
-- Loading a change: the user reloads Sekhmet by hand on `brave://extensions`.
-  Say which files changed and that a reload is needed.
-- Self-reload is **disabled**. `dev-reload.js` is not in the manifest because
-  `runtime.reload()` made Brave's memory run away twice. Do not run
-  `native-host/reload-extension`, do not tell the user to run it, and do not
-  add `dev-reload.js` back to the manifest without asking. Leave the leftover
-  reload files as they are. This includes the uncommitted `dev-reload.js` line
-  in README.md and the change to `native-host/install.sh`. Keep them out of
-  commits.
+- Loading a change: run `native-host/reload-guarded [changed files]`, with a
+  Bash timeout of at least 180000 ms. It reloads Sekhmet, refreshes no tab, and
+  quits Brave if memory runs away in the next 60 s (log in
+  `~/.local/share/sekhmet/reload-guarded/`). Open tabs keep their old scripts:
+  each loaded tab shows a "Sekhmet was updated" toast and reloads on a click.
+  Say which files changed and which tabs need that click. If the command
+  refuses or does not exit 0, say so; the user then reloads by hand on
+  `brave://extensions`.
+- Reload Sekhmet no other way: not `native-host/reload-extension` alone, not
+  `runtime.reload()`, and nothing that refreshes tabs. Refreshing every
+  matching tab loaded about 1,290 sleeping tabs at once and made Brave's
+  memory run away three times (`.cc/reports/reload-test-results.md`). Ask
+  before you add code that reloads a tab without a click, or remove
+  `dev-reload.js` from the manifest. Reload tests in a browser go through
+  `.cc/scripts/reload-test/guard.sh` only.
 - Browser checks: headless Google Chrome ignores `--load-extension`; headless
   Brave loads the unpacked extension. Fixture scripts that drive the content
   scripts on a fake watch page live in `.cc/scripts/browser/` (see its README).

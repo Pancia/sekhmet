@@ -57,12 +57,17 @@ install_host "com.sekhmet.ytdl" \
     "$SCRIPT_DIR/run_ytdl_host.sh" \
     "Sekhmet downloader (spawns ~/dotfiles/bin/ytdl)"
 
+install_host "com.sekhmet.dev_reload" \
+    "$SCRIPT_DIR/run_dev_reload_host.sh" \
+    "Sekhmet dev reload (forwards native-host/reload-extension)"
+
 install_host "com.sekhmet.picker_claude" \
     "$SCRIPT_DIR/run_picker_claude_host.sh" \
     "Sekhmet element picker: asks Claude for block rules"
 
 # The detached download wrapper isn't a host manifest entry, but must be runnable.
 chmod +x "$SCRIPT_DIR/ytdl_download.sh"
+chmod +x "$SCRIPT_DIR/reload-extension"
 
 echo ""
 echo "Restart Brave for changes to take effect."

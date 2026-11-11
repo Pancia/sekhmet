@@ -161,6 +161,12 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
     }
 });
 
+// Content scripts hold a port open to this page (lib.js,
+// watchForExtensionReload), so that they learn when it goes away in a reload
+// and can offer to reload their tab. Nothing is sent on it. The listener only
+// keeps the port from being closed at once for want of a receiver.
+browser.runtime.onConnect.addListener(() => {});
+
 // Handle message for getting tab ID
 // Only async branches that reply later return `true` (keep the channel open).
 // Synchronous / fire-and-forget branches must return undefined.

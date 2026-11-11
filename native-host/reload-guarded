@@ -1,0 +1,226 @@
+#!/bin/bash
+# Reloads Sekhmet through the pipe (reload-extension), then watches the Brave
+# that runs it, and quits that Brave if its memory runs away.
+# Usage: native-host/reload-guarded [changed files...]
+# From a Claude Bash call, give it a timeout of at least 180 s.
+#
+# Three times, a reload of Sekhmet made Brave's memory run away into swap. The
+# cause: dev-reload.js refreshed every matching tab, about 1,290 of them, and a
+# refresh loads a sleeping tab. dev-reload.js now refreshes no tab. This guard
+# stays as the second line of defence.
+#
+# The watching runs fully apart from the shell that started it: forked twice,
+# so its parent is launchd, in a session of its own. It writes to a log file of
+# its own run. So it goes on, and its report survives, if that shell is killed
+# - a Claude session that dies, or a Bash call that is stopped or times out,
+# which kills the call's processes one by one. (In the third incident the first
+# guard was a child of the session, did nothing, and its output was lost.) The
+# shell that started it only shows the log, and ends with the guard's status.
+#
+# Twice a second it checks, in this order, cheapest first:
+#   - swap in use grew more than RELOAD_MAX_SWAP_GROWTH_MB (1024)
+#   - memory macOS can still give out fell under RELOAD_MIN_LEVEL percent (20)
+#   - Brave has RELOAD_MAX_NEW_TABS (20) more page processes than at the start
+#     (sleeping tabs being loaded: the incidents' cause, seen directly; a
+#     reload itself adds none). Do not open tabs during the watch.
+#   - Brave's resident memory grew more than RELOAD_MAX_RSS_GROWTH_MB (3000)
+#   - Brave's footprint grew more than RELOAD_MAX_GROWTH_MB (2048). Footprint
+#     counts compressed memory, which resident memory does not. `footprint`
+#     can stall under heavy swapping, so a separate process samples it and the
+#     loop only reads the latest figure.
+# On the first that is true it asks Brave to quit (SIGTERM: tabs come back on
+# the next start), and force-quits its process group 5 seconds later if needed.
+#
+# The Brave is found from the pipe helper, which that Brave started: so it is
+# always the Brave that runs Sekhmet, never another one.
+#
+# Other settings: RELOAD_WATCH_S (60), RELOAD_MIN_START_LEVEL (30, refuse to
+# start with less memory available), RELOAD_LOG (the log file; by default a new
+# one per run in ~/.local/share/sekhmet/reload-guarded/), RELOAD_EXPECT (refuse
+# unless the Brave's command line contains this text - a test passes its temp
+# folder's name).
+# Exit: 0 reloaded and back, 1 not sent or not back, 3 Brave was quit or quit
+# on its own, 4 the guard's report never ended (look at the log).
+set -u
+
+HERE="$(cd "$(dirname "$0")" && pwd -P)"
+BRAVE_BIN="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+WATCH_S="${RELOAD_WATCH_S:-60}"
+MAX_GROWTH_MB="${RELOAD_MAX_GROWTH_MB:-2048}"
+MAX_RSS_GROWTH_MB="${RELOAD_MAX_RSS_GROWTH_MB:-3000}"
+MAX_SWAP_GROWTH_MB="${RELOAD_MAX_SWAP_GROWTH_MB:-1024}"
+MAX_NEW_TABS="${RELOAD_MAX_NEW_TABS:-20}"
+MIN_LEVEL="${RELOAD_MIN_LEVEL:-20}"
+MIN_START_LEVEL="${RELOAD_MIN_START_LEVEL:-30}"
+
+# A setting that is not a whole number would turn a check off, or end the watch
+# at once after the reload is sent.
+for v in WATCH_S MAX_GROWTH_MB MAX_RSS_GROWTH_MB MAX_SWAP_GROWTH_MB MAX_NEW_TABS MIN_LEVEL MIN_START_LEVEL; do
+    case "${!v}" in ''|*[!0-9]*) echo "reload-guarded: $v is '${!v}', not a whole number; not starting"; exit 1 ;; esac
+done
+
+# ---------------------------------------------------------------- front end
+if [ "${1:-}" != "--guard" ]; then
+    LOG="${RELOAD_LOG:-$HOME/.local/share/sekhmet/reload-guarded/$(date '+%Y%m%d-%H%M%S').log}"
+    mkdir -p "$(dirname "$LOG")" || exit 1
+    : >> "$LOG" || exit 1
+    START_LINES=$(wc -l < "$LOG" | tr -d ' ')
+    echo "reload-guarded: log $LOG"
+    # Fork, and the first child exits: the guard's parent becomes launchd.
+    /usr/bin/perl -MPOSIX -e 'fork and exit 0; POSIX::setsid() != -1 or die "setsid: $!"; exec @ARGV or die "exec: $!"' \
+        /bin/bash "$HERE/reload-guarded" --guard "$@" </dev/null >>"$LOG" 2>&1
+    # Show the log until the guard's last line, "reload-guarded: exit N".
+    shown=$START_LINES
+    end=$(( $(date +%s) + WATCH_S + 60 ))
+    while :; do
+        total=$(wc -l < "$LOG" | tr -d ' ')
+        if [ "$total" -gt "$shown" ]; then
+            new=$(sed -n "$(( shown + 1 )),${total}p" "$LOG")
+            printf '%s\n' "$new"
+            shown=$total
+            code=$(printf '%s\n' "$new" | sed -n -E 's/.* reload-guarded: exit ([0-9]+)$/\1/p' | tail -1)
+            [ -n "$code" ] && exit "$code"
+        fi
+        if [ "$(date +%s)" -ge "$end" ]; then
+            echo "reload-guarded: the guard's report did not end in time; see $LOG"
+            exit 4
+        fi
+        sleep 0.5
+    done
+fi
+shift
+
+# -------------------------------------------------------------------- guard
+trap '' HUP INT
+say() { echo "$(date '+%H:%M:%S') reload-guarded: $*"; }
+
+SAMPLER=""
+FPFILE=""
+on_exit() {
+    local code=$?
+    [ -n "$SAMPLER" ] && kill "$SAMPLER" 2>/dev/null
+    case "$FPFILE" in */sekhmet-reload-guarded.??????) rm -f "$FPFILE" ;; esac
+    say "exit $code"
+}
+trap on_exit EXIT
+
+# Only the helper itself: a shell whose command line merely names the file
+# must not match.
+HELPER_RE='[Pp]ython[0-9.]* /.*/dev_reload_host\.py$'
+
+# The Brave main process above a pid: walk parents to the Brave executable.
+brave_above() {
+    local p="$1" cmd
+    while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+        cmd=$(ps -o command= -p "$p" 2>/dev/null)
+        case "$cmd" in "$BRAVE_BIN"*) echo "$p"; return 0 ;; esac
+        p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+    done
+    return 1
+}
+
+num() { case "$1" in ''|*[!0-9]*) echo "$2" ;; *) echo "$1" ;; esac; }
+
+swap_mb() { sysctl -n vm.swapusage | sed -E 's/.*used = ([0-9.]+)M.*/\1/' | cut -d. -f1; }
+
+# "<resident MB> <page processes>" for Brave's process group only, so ps does
+# not read every process's arguments (which can wait on swapped pages).
+rss_and_tabs() {
+    ps -o rss=,command= -g "$PGID" 2>/dev/null | awk '{ r += $1; if ($0 ~ /--type=renderer/) n++ }
+        END { print int(r / 1024), n + 0 }'
+}
+
+quit_brave() {
+    say "TRIPPED: $1"
+    # The same process as at the start: its start time is the kernel's, and
+    # unlike the command line it can always be read.
+    local now
+    now=$(ps -o lstart= -p "$MAIN" 2>/dev/null)
+    if [ -z "$now" ] || [ "$now" != "$MAIN_START" ]; then
+        say "pid $MAIN is no longer the Brave from the start ('$now'); nothing to quit"; exit 3
+    fi
+    say "quitting Brave (pid $MAIN)"
+    kill -TERM "$MAIN" 2>/dev/null
+    for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$MAIN" 2>/dev/null || break; sleep 0.5; done
+    if kill -0 "$MAIN" 2>/dev/null; then
+        say "Brave did not quit in 5 s - force-quitting its process group"
+        kill -KILL -"$PGID" 2>/dev/null
+    fi
+    exit 3
+}
+
+HELPERS=$(pgrep -f "$HELPER_RE")
+[ -n "$HELPERS" ] || { say "Sekhmet is not listening (no pipe helper running)"; exit 1; }
+[ "$(echo "$HELPERS" | wc -l | tr -d ' ')" = 1 ] || { say "more than one pipe helper runs ($(echo $HELPERS)): two Braves listen, and the reload could reach either. Not sending."; exit 1; }
+OLD_HELPER=$HELPERS
+MAIN=$(brave_above "$OLD_HELPER") || { say "no Brave above the pipe helper (pid $OLD_HELPER)"; exit 1; }
+PGID=$(ps -o pgid= -p "$MAIN" | tr -d ' ')
+MAIN_START=$(ps -o lstart= -p "$MAIN" 2>/dev/null)
+[ -n "$MAIN_START" ] || { say "cannot read the start time of Brave (pid $MAIN)"; exit 1; }
+# Force-quitting a group is only safe if it is Brave's own.
+[ "$PGID" = "$MAIN" ] || { say "Brave (pid $MAIN) is not its own process group ($PGID); not guarding"; exit 1; }
+if [ -n "${RELOAD_EXPECT:-}" ]; then
+    case "$(ps -o command= -p "$MAIN")" in *"$RELOAD_EXPECT"*) ;; *) say "Brave pid $MAIN is not the expected one; stopping"; exit 1 ;; esac
+fi
+
+LVL0=$(num "$(sysctl -n kern.memorystatus_level)" 0)
+[ "$LVL0" -ge "$MIN_START_LEVEL" ] || { say "only ${LVL0}% memory available (need ${MIN_START_LEVEL}%); not sending the reload"; exit 1; }
+SWAP0=$(num "$(swap_mb)" 0)
+x=$(rss_and_tabs); RSS0=$(num "${x%% *}" 0); TABS0=$(num "${x##* }" 0)
+
+# The footprint sampler. One MB figure per line; the loop reads the last one.
+FPFILE=$(mktemp "${TMPDIR:-/tmp}/sekhmet-reload-guarded.XXXXXX") || { say "mktemp failed"; exit 1; }
+ME=$$
+( end=$(( $(date +%s) + WATCH_S + 30 ))
+  while kill -0 "$ME" 2>/dev/null && [ "$(date +%s)" -lt "$end" ]; do
+      pids=$(pgrep -g "$PGID" | tr '\n' ' ')
+      [ -n "$pids" ] && footprint --noCategories -f bytes $pids 2>/dev/null |
+          awk '/^Summary Footprint:/ { s=$3 } /Footprint: [0-9]+ B/ && !f { for (i=1;i<=NF;i++) if ($i=="Footprint:") f=$(i+1) }
+               END { if (s || f) print int((s ? s : f) / 1048576) }' >> "$FPFILE"
+      sleep 1
+  done ) </dev/null >/dev/null 2>&1 &
+SAMPLER=$!
+disown "$SAMPLER" 2>/dev/null   # no "Terminated" notice in the log when it is stopped
+
+# A first footprint figure as the baseline, but never wait long for it.
+FP0=""
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    FP0=$(num "$(tail -1 "$FPFILE" 2>/dev/null)" ""); [ -n "$FP0" ] && break; sleep 0.5
+done
+[ -n "$FP0" ] || say "no footprint figure in 10 s; the footprint check is off for this run"
+
+say "Brave pid $MAIN: ${TABS0} page processes, resident ${RSS0} MB, footprint ${FP0:-?} MB; swap ${SWAP0} MB, memory level ${LVL0}%"
+"$HERE/reload-extension" "$@" || exit 1
+
+start=$(date +%s); back=""; tick=0
+fp=${FP0:-0}; fpeak=$fp; rss=$RSS0; tabs=$TABS0; swap=$SWAP0; lvl=$LVL0
+while [ $(( $(date +%s) - start )) -lt "$WATCH_S" ]; do
+    kill -0 "$MAIN" 2>/dev/null || { say "Brave exited on its own"; exit 3; }
+    swap=$(num "$(swap_mb)" "$SWAP0")
+    [ $(( swap - SWAP0 )) -gt "$MAX_SWAP_GROWTH_MB" ] && quit_brave "swap grew $(( swap - SWAP0 )) MB"
+    lvl=$(num "$(sysctl -n kern.memorystatus_level)" "$LVL0")
+    [ "$lvl" -lt "$MIN_LEVEL" ] && quit_brave "memory level fell to ${lvl}%"
+    x=$(rss_and_tabs); rss=$(num "${x%% *}" "$rss"); tabs=$(num "${x##* }" "$tabs")
+    [ $(( tabs - TABS0 )) -gt "$MAX_NEW_TABS" ] && quit_brave "$(( tabs - TABS0 )) new page processes (tabs are being loaded)"
+    [ $(( rss - RSS0 )) -gt "$MAX_RSS_GROWTH_MB" ] && quit_brave "resident memory grew $(( rss - RSS0 )) MB (now ${rss} MB)"
+    if [ -n "$FP0" ]; then
+        fp=$(num "$(tail -1 "$FPFILE" 2>/dev/null)" "$fp")
+        [ "$fp" -gt "$fpeak" ] && fpeak=$fp
+        [ $(( fp - FP0 )) -gt "$MAX_GROWTH_MB" ] && quit_brave "footprint grew $(( fp - FP0 )) MB (now ${fp} MB)"
+    fi
+    if [ -z "$back" ]; then
+        new=$(pgrep -g "$PGID" -f "$HELPER_RE" | head -1)
+        if [ -n "$new" ] && [ "$new" != "$OLD_HELPER" ]; then
+            back=$(( $(date +%s) - start ))
+            say "Sekhmet is back after ${back} s"
+        fi
+    fi
+    tick=$(( tick + 1 ))
+    [ $(( tick % 10 )) -eq 0 ] && say "+$(( $(date +%s) - start ))s: ${tabs} page processes, resident ${rss} MB, footprint ${fp} MB, swap ${swap} MB, level ${lvl}%"
+    sleep 0.5
+done
+
+[ -n "$back" ] || say "WARNING - Sekhmet did not come back (no new pipe helper) within ${WATCH_S} s"
+say "done - page processes ${TABS0} -> ${tabs}, resident ${RSS0} -> ${rss} MB, footprint ${FP0:-?} -> ${fp} MB (peak ${fpeak} MB), swap ${SWAP0} -> ${swap} MB"
+[ -n "$back" ] && exit 0
+exit 1
