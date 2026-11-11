@@ -19,6 +19,18 @@ wallpapers…**, or the Details page on `brave://extensions` - and add images pe
 gate. One is picked at random each time a gate goes up. They are stored in the
 browser, not in this repo.
 
+## Element picker
+
+Right-click anything, **Pick element to block…**. A panel shows the element's HTML
+with hashed class names removed, and rules for uBlock Origin that would hide it,
+each with how many elements it hides on the page. Arrow keys or the row of
+element names move the selection; **+ Example** adds more elements the rule must
+also cover. **Copy** puts `site##rule` on the clipboard for uBlock's My filters.
+
+**Ask Claude** sends the trimmed HTML through the `com.sekhmet.picker_claude`
+native host, which runs `~/dotfiles/bin/claude-p`. It only runs when pressed.
+`test/picker-page.html` drives the picker in a real browser; see its header.
+
 ## Installation
 
 ### Firefox

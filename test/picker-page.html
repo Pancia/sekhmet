@@ -1,0 +1,156 @@
+<!doctype html>
+<!--
+  Drives picker.js in a real browser engine. A Pinterest-like grid with hashed
+  class names, one promoted pin. Run headless:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+      --virtual-time-budget=5000 --dump-dom test/picker-page.html
+  and read the PASS/FAIL lines in <pre id="out">. Open it in a browser to look.
+-->
+<html><head><meta charset="utf-8"><title>picker page test</title>
+<style>
+  body { font: 14px system-ui; margin: 0; padding: 16px; }
+  .hs0 { display: grid; grid-template-columns: repeat(3, 180px); gap: 12px; }
+  .zI7 { height: 120px; background: #ddd; border-radius: 12px; padding: 8px; }
+</style></head>
+<body>
+<div id="main-feed" class="x1lliihq css-9f8e7d">
+  <div class="hs0 un8" role="list">
+    <div data-test-id="pin" class="zI7 Jea"><a href="/pin/1001/"><span class="TB_">Cats</span></a></div>
+    <div data-test-id="pin" class="zI7 Jea"><a href="/pin/1002/"><span class="TB_">Dogs</span></a></div>
+    <div data-test-id="pin" class="zI7 Jea"><a href="https://ads.example.net/c?x=1"><span class="TB_">Shoes</span></a>
+      <div class="kVc4"><span aria-label="Promoted">Promoted</span> by Brand</div></div>
+    <div data-test-id="pin" class="zI7 Jea"><a href="/pin/1004/"><span class="TB_">Birds</span></a></div>
+    <div data-test-id="pin" class="zI7 Jea"><a href="/pin/1005/"><span class="TB_">Trees</span></a></div>
+  </div>
+</div>
+<pre id="out"></pre>
+<script>
+  // What background.js and the native host would answer.
+  window.browser = { runtime: { id: 'test', sendMessage: async msg => {
+    window.__sent = msg;
+    return { ok: true, suggestions: [
+      { selector: '[data-test-id="pin"]:has([aria-label="Promoted"])', why: 'Pins carrying the Promoted label.' },
+      { selector: 'span:has-text(/^Promoted$/):upward([data-test-id="pin"])', why: 'Walks up from the label.' },
+      { selector: '.nothing-here', why: 'Matches nothing.' } ],
+      recommended: 2, recommendation: 'It starts at the label itself.' };
+  } } };
+  window.pageKeys = 0;
+  document.addEventListener('keydown', () => window.pageKeys++);
+  window.__sekhmetContextTarget = { el: document.querySelectorAll('[data-test-id="pin"]')[2], at: Date.now() };
+</script>
+<script src="../picker.js"></script>
+<script>
+(async () => {
+  // #look leaves the picker open to look at; #look-claude also shows the stub's answer.
+  if (location.hash === '#look') return;
+  if (location.hash === '#look-claude') {
+    [...window.__sekhmetPicker._root.querySelectorAll('button')].find(b => b.textContent === 'Ask Claude').click();
+    return;
+  }
+  const lines = [];
+  const ok = (label, cond) => lines.push(`${cond ? 'PASS' : 'FAIL'}  ${label}`);
+  const P = window.__sekhmetPicker;
+  const S = P._state;
+  const R = P._root;
+  const promo = document.querySelectorAll('[data-test-id="pin"]')[2];
+  const key = k => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, composed: true, cancelable: true }));
+  const tick = () => new Promise(r => setTimeout(r, 30));
+
+  ok('starts on the right-clicked element', S.target === promo);
+  const sels = S.candidates.map(c => `${c.count} ${c.sel}`);
+  lines.push('  candidates:\n    ' + sels.join('\n    '));
+  ok('offers the test hook, matching all 5 pins', sels.includes('5 [data-test-id="pin"]'));
+  ok('offers a rule for only the promoted pin', S.candidates.some(c => c.count === 1 && /Promoted/.test(c.sel)));
+  ok('no candidate uses a hashed class', !S.candidates.some(c => /zI7|Jea|hs0|x1lliihq|kVc4/.test(c.sel)));
+  ok('every candidate hides the picked element', S.candidates.every(c => document.querySelectorAll('*').length && c.count >= 1));
+  const tree = R.querySelector('pre').textContent;
+  ok('HTML view hides hashed classes and counts them', /class="\+2"/.test(tree) && !/zI7/.test(tree));
+
+  key('ArrowUp'); ok('↑ selects the parent', S.target === promo.parentElement);
+  key('ArrowDown'); ok('↓ goes back the way it came', S.target === promo);
+  key('ArrowRight'); ok('→ selects the next sibling', S.target === promo.nextElementSibling);
+  key('ArrowLeft'); ok('← selects the previous sibling', S.target === promo);
+  ok('arrow keys do not reach the page', window.pageKeys === 0);
+
+  const nav = [...R.querySelectorAll('.nav button')];
+  ok('four step buttons', nav.length === 4);
+  nav[0].click(); ok('Parent button selects the parent', S.target === promo.parentElement);
+  nav[1].click(); ok('Child button goes back the way it came', S.target === promo);
+  nav[3].click(); ok('Next button selects the next sibling', S.target === promo.nextElementSibling);
+  nav[2].click(); ok('Previous button selects the previous sibling', S.target === promo);
+  ok('Child is disabled on an element with no children', (() => {
+    const leaf = promo.querySelector('span'); P.start(leaf);
+    const off = R.querySelectorAll('.nav button')[1].disabled; P.start(promo); return off; })());
+
+  // Dragging the header moves the panel.
+  const head = R.querySelector('.head'), panelEl = R.querySelector('.panel');
+  const before = panelEl.getBoundingClientRect();
+  const pe = (type, x, y) => new PointerEvent(type, { bubbles: true, composed: true, button: 0, pointerId: 1, clientX: x, clientY: y });
+  head.dispatchEvent(pe('pointerdown', before.left + 50, before.top + 10));
+  head.dispatchEvent(pe('pointermove', 80, 30));
+  head.dispatchEvent(pe('pointerup', 80, 30));
+  const after = panelEl.getBoundingClientRect();
+  ok('dragging the header moves the panel', Math.round(after.left) === 30 && Math.round(after.top) === 20);
+  head.dispatchEvent(pe('pointermove', 300, 300));
+  ok('it stops following after release', Math.round(panelEl.getBoundingClientRect().left) === 30);
+  // Back where it was, off the pins the next steps click on.
+  head.dispatchEvent(pe('pointerdown', after.left + 50, after.top + 10));
+  head.dispatchEvent(pe('pointermove', before.left + 50, before.top + 10));
+  head.dispatchEvent(pe('pointerup', before.left + 50, before.top + 10));
+
+  // Typing in the goal box reaches the box but not the page.
+  const goal = R.querySelector('textarea');
+  goal.focus();
+  goal.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', bubbles: true, composed: true }));
+  ok('typing in the panel does not reach the page', window.pageKeys === 0);
+  goal.value = 'every promoted pin';
+
+  // Example mode: click another pin; rules must now cover both.
+  R.querySelectorAll('.head button')[1].click();
+  ok('+ Example turns on pointing mode', S.mode === 'example');
+  const other = promo.parentElement.children[0];
+  const r = other.getBoundingClientRect();
+  const opts = { bubbles: true, cancelable: true, composed: true, clientX: r.left + 20, clientY: r.top + 60 };
+  let pageSawClick = false;
+  other.addEventListener('click', () => { pageSawClick = true; });
+  other.dispatchEvent(new MouseEvent('click', opts));
+  ok('the click is kept from the page', !pageSawClick);
+  ok('example added', S.examples.length === 1 && S.examples[0] === other);
+  ok('with an example, every rule covers both', S.candidates.length > 0 && S.candidates.every(c => c.count >= 2));
+  R.querySelector('.label button').click();
+  ok('clear removes the example', S.examples.length === 0);
+
+  // Ask Claude, against the stub.
+  R.querySelector('button.primary:not(.edit button)');
+  [...R.querySelectorAll('button')].find(b => b.textContent === 'Ask Claude').click();
+  await tick(); await tick();
+  ok('sends the goal and trimmed context', window.__sent && window.__sent.action === 'pickerAskClaude'
+     && window.__sent.payload.goal === 'every promoted pin' && /data-test-id="pin"/.test(window.__sent.payload.context)
+     && !/zI7/.test(window.__sent.payload.context));
+  const rows = [...R.querySelectorAll('.sec:last-child .rule')].map(r => r.querySelector('.count').textContent + ' ' + r.querySelector('.count').className);
+  lines.push('  claude rows: ' + JSON.stringify(rows));
+  ok('Claude rules are counted on the page', rows[0] === '1 count' && rows[1] === '1 count');
+  const first = R.querySelector('.sec:last-child .rule');
+  ok('Claude\'s pick is first and marked', /^span:has-text/.test(first.querySelector('.sel').firstChild.nodeValue)
+     && first.querySelector('.badge.rec') && /Recommended/.test(first.querySelector('.badge').textContent));
+  ok('the others keep their rank', R.querySelectorAll('.sec:last-child .badge')[1].textContent === '#1');
+  ok('Claude\'s pick is in the editor', R.querySelector('input').value.startsWith('span:has-text'));
+  ok('the reason is shown', /Recommended: It starts at the label itself/.test(R.querySelector('.sec:last-child .status').textContent));
+  ok('a rule that misses the element is flagged', /bad/.test(rows[2]));
+
+  // The editor counts procedural rules.
+  const input = R.querySelector('input');
+  input.value = '[data-test-id="pin"]:has-text(Promoted)';
+  input.dispatchEvent(new Event('input'));
+  ok('editor counts a procedural rule', R.querySelector('.edit .count').textContent === '1');
+  input.value = 'div:frobnicate(';
+  input.dispatchEvent(new Event('input'));
+  ok('editor flags a broken rule', R.querySelector('.edit .count').textContent === '✕');
+
+  key('Escape');
+  ok('Esc closes', !document.querySelector('sekhmet-picker'));
+
+  document.getElementById('out').textContent = lines.join('\n');
+})().catch(e => { document.getElementById('out').textContent = 'FAIL  threw: ' + e.stack; });
+</script>
+</body></html>

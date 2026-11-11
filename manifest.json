@@ -27,7 +27,7 @@
     "background": {
         "scripts": ["polyfill.js", "background.js"]
     },
-    "permissions": ["storage", "unlimitedStorage", "tabs", "contextMenus", "nativeMessaging"],
+    "permissions": ["storage", "unlimitedStorage", "tabs", "contextMenus", "nativeMessaging", "activeTab"],
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],
@@ -50,6 +50,12 @@
             "js": ["polyfill.js", "lib.js", "thechosen.js"],
             "run_at": "document_end",
             "all_frames": false
+        },
+        {
+            "matches": ["*://*/*"],
+            "js": ["picker-target.js"],
+            "run_at": "document_start",
+            "all_frames": true
         },
         {
             "matches": ["*://*/*"],

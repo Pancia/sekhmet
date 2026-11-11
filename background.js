@@ -21,6 +21,12 @@ browser.contextMenus.create({
 }, onCreated);
 
 browser.contextMenus.create({
+    id: "sekhmet-picker",
+    title: "Pick element to block…",
+    contexts: ["all"],
+}, onCreated);
+
+browser.contextMenus.create({
     id: "sekhmet-debug-separator",
     type: "separator",
     contexts: ["all"],
@@ -37,6 +43,21 @@ browser.contextMenus.create({
     title: "DEBUG: color test",
     contexts: ["all"],
 }, onCreated);
+
+// The picker is injected on request rather than listed in the manifest, so no
+// page carries its weight until it is asked for. Into the frame that was
+// right-clicked, where picker-target.js has recorded the element.
+async function startPicker(tab, frameId) {
+    if (!tab) return;
+    const where = frameId ? { frameId } : {};
+    try {
+        await browser.tabs.executeScript(tab.id, { file: "polyfill.js", ...where });
+        await browser.tabs.executeScript(tab.id, { file: "picker.js", ...where });
+    } catch (err) {
+        // Browser pages (brave://, the web store) refuse all extensions.
+        console.log(`Sekhmet: Could not start the picker in tab ${tab.id}`, err);
+    }
+}
 
 function getCurrentTab() {
     return browser.tabs.query({ currentWindow: true, active: true });
@@ -121,6 +142,9 @@ browser.contextMenus.onClicked.addListener((info, tab) => {
         case "sekhmet-wallpapers":
             browser.runtime.openOptionsPage();
             break;
+        case "sekhmet-picker":
+            startPicker(tab, info.frameId);
+            break;
         case "color-test":
             getCurrentTab().then(([{ id: tabId }]) => sendToTab(tabId, 'showColorTest'));
             break;
@@ -171,6 +195,14 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 console.error("Sekhmet: Native messaging failed", err);
             });
             return;
+
+        case "pickerAskClaude":
+            // Waits on Claude, which takes seconds. The native host enforces
+            // the deadline; this only relays its answer or the failure.
+            browser.runtime.sendNativeMessage("com.sekhmet.picker_claude", request.payload)
+                .then(response => sendResponse(response))
+                .catch(err => sendResponse({ ok: false, error: String(err && err.message || err) }));
+            return true; // keep the channel open for the async sendResponse
 
         case "ytdlDownload":
             browser.runtime.sendNativeMessage("com.sekhmet.ytdl", {
