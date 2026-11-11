@@ -26,7 +26,7 @@ console.log(`  ${sources.length} files parse`);
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
 const referenced = [
     ...(manifest.background ? manifest.background.scripts : []),
-    ...manifest.content_scripts.flatMap(cs => cs.js),
+    ...manifest.content_scripts.flatMap(cs => [...(cs.js || []), ...(cs.css || [])]),
     ...(manifest.web_accessible_resources || [])
 ];
 const missing = [...new Set(referenced)].filter(f => !fs.existsSync(path.join(ROOT, f)));
