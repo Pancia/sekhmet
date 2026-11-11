@@ -1,6 +1,6 @@
 # Browser fixtures
 
-Two scripts that drive the real `lib.js`, `loop.js` and `feeling-tracker.js`
+Scripts that drive the real `lib.js`, `loop.js`, `feeling-tracker.js` and `ask-ai.js`
 in headless Google Chrome, on a fake YouTube watch page served by request
 interception. Each prints `PASS`/`FAIL` lines and exits 1 on any failure.
 
@@ -11,6 +11,10 @@ interception. Each prints `PASS`/`FAIL` lines and exits 1 on any failure.
   seconds, clicking early, the opening grace period, leaving for the feed and
   coming back to the same video (the miniplayer path), fullscreen, and videos
   too short for the grace period. About 2.5 minutes.
+- `ask-ai.js`: the ✨ Ask button against a fake Ask panel built from what
+  YouTube's bundle shows: opening the panel, waiting out the welcome load,
+  sending the prompt once, the label fallback, a panel already open, no Ask
+  button, and an unreadable prompt. About 25 seconds.
 
 ## Run
 
@@ -22,6 +26,7 @@ npm install
 ./make-clips.sh
 node drive.js
 node countdown.js
+node ask-ai.js
 ```
 
 `node_modules`, the lock file, the clips and `out/` are ignored by git.

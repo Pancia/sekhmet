@@ -123,10 +123,7 @@ function initializeYTDL() {
 
             ytdlContainer.appendChild(downloadBtn);
 
-            const pill = mastheadPill();
-            if (pill) {
-                pill.append(ytdlContainer);
-            }
+            fillMastheadSlot("ytdl", ytdlContainer);
         });
     });
 

@@ -210,6 +210,14 @@ browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 .catch(err => sendResponse({ ok: false, error: String(err && err.message || err) }));
             return true; // keep the channel open for the async sendResponse
 
+        case "readPrompt":
+            // The prompt text lives in ~/dotfiles/ai/prompts, read fresh on
+            // each request so an edit there needs no extension reload.
+            browser.runtime.sendNativeMessage("com.sekhmet.prompts", { name: request.name })
+                .then(response => sendResponse(response))
+                .catch(err => sendResponse({ ok: false, error: String(err && err.message || err) }));
+            return true; // keep the channel open for the async sendResponse
+
         case "ytdlDownload":
             browser.runtime.sendNativeMessage("com.sekhmet.ytdl", {
                 id: request.id,

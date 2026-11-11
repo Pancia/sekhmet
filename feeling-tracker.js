@@ -962,10 +962,7 @@ let initializeFeelingTracker = (function() {
                 container.appendChild(statusButton);
                 container.appendChild(dot);
 
-                const pill = mastheadPill();
-                if (pill) {
-                    pill.prepend(container);
-                }
+                fillMastheadSlot("compass", container);
 
                 updateStatusButton();
                 // The retry loop can land here more than once per page.

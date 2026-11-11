@@ -65,6 +65,10 @@ install_host "com.sekhmet.picker_claude" \
     "$SCRIPT_DIR/run_picker_claude_host.sh" \
     "Sekhmet element picker: asks Claude for block rules"
 
+install_host "com.sekhmet.prompts" \
+    "$SCRIPT_DIR/run_prompts_host.sh" \
+    "Sekhmet prompt reader (~/dotfiles/ai/prompts)"
+
 # The detached download wrapper isn't a host manifest entry, but must be runnable.
 chmod +x "$SCRIPT_DIR/ytdl_download.sh"
 chmod +x "$SCRIPT_DIR/reload-extension"

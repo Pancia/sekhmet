@@ -87,11 +87,18 @@ function waitForElementToBeLoaded(selector, callback, elementTest, config) {
     };
 }
 
-// The pill the masthead buttons share - the 🧭 feeling tracker and the 📽️
-// downloader. They are built by different modules at different times, so
-// whichever gets there first makes it and the other joins. Each places itself
-// (the compass prepends, the projector appends) so the order does not depend
-// on which one won. YouTube's own chip colours, so it follows light and dark.
+// The pill the masthead buttons share - the 🧭 feeling tracker, the 📽️
+// downloader and the ✨ Ask button. They are built by different modules at
+// different times, so the pill is made as soon as the masthead exists, with one
+// slot per button in a fixed order. Until a module fills its slot, the slot
+// shows its icon greyed out and inert, so nothing pops in or reorders.
+// YouTube's own chip colours, so it follows light and dark.
+const MASTHEAD_SLOTS = [
+    ["compass", "🧭"],
+    ["ytdl", "📽️"],
+    ["ask", "✨"],
+];
+
 function mastheadPill() {
     const existing = document.getElementById("sekhmet-masthead-pill");
     if (existing) { return existing; }
@@ -114,8 +121,37 @@ function mastheadPill() {
         background: var(--yt-spec-badge-chip-background, rgba(128, 128, 128, 0.15));
         border: 1px solid var(--yt-spec-10-percent-layer, rgba(128, 128, 128, 0.25));
     `;
+    for (const [name, icon] of MASTHEAD_SLOTS) {
+        const slot = document.createElement("div");
+        slot.dataset.sekhmetSlot = name;
+        slot.style.display = "flex";
+        const placeholder = document.createElement("span");
+        placeholder.className = "sekhmet-slot-placeholder";
+        placeholder.textContent = icon;
+        placeholder.title = "Loading…";
+        placeholder.style.cssText = `
+            font-size: 28px;
+            line-height: 1;
+            opacity: 0.35;
+            filter: grayscale(1);
+            cursor: default;
+            user-select: none;
+        `;
+        slot.append(placeholder);
+        pill.append(slot);
+    }
     center.prepend(pill);
     return pill;
+}
+
+// Put a module's widget into its slot, replacing the placeholder or an older
+// copy of the widget. Returns false if the masthead is not there yet.
+function fillMastheadSlot(name, widget) {
+    const pill = mastheadPill();
+    const slot = pill && pill.querySelector(`[data-sekhmet-slot="${name}"]`);
+    if (!slot) { return false; }
+    slot.replaceChildren(widget);
+    return true;
 }
 
 // Focus can sit inside a shadow root, in which case document.activeElement
