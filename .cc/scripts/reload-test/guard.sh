@@ -76,9 +76,15 @@ fi
 if lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; then
     echo "GUARD: port $PORT is in use, not starting"; exit 2
 fi
-if pgrep -f "sekhmet-reload-test\." >/dev/null; then
+# A previous test's Brave or node driver. Anchored to those executables: a loose
+# match also hit unrelated shells, editors and log watchers naming a test folder.
+leftovers() {
+    pgrep -f '^/Applications/Brave Browser\.app/.*sekhmet-reload-test\.'
+    pgrep -f '(^|/)node [^ ]*/reload-test/drive\.mjs .*sekhmet-reload-test\.'
+}
+if [ -n "$(leftovers)" ]; then
     echo "GUARD: a previous test's processes are still alive, not starting:"
-    pgrep -fl "sekhmet-reload-test\."; exit 2
+    ps -o pid=,command= -p "$(leftovers | paste -sd, -)"; exit 2
 fi
 
 # One validated temp root. Every name match uses its token, so an empty or odd

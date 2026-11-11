@@ -23,6 +23,22 @@ for (const rel of sources) {
 }
 console.log(`  ${sources.length} files parse`);
 
+// No extension script may call tabs.reload: refreshing every matching tab woke
+// about 1,290 sleeping tabs at once and ran Brave out of memory three times.
+// Comments are left out, so a note about the old code does not trip it.
+const reloaders = sources.filter(rel => !rel.startsWith('test' + path.sep)).filter(rel => {
+    const code = fs.readFileSync(path.join(ROOT, rel), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:\\])\/\/.*$/gm, '$1');
+    return /\btabs\s*\.\s*reload\b/.test(code);
+});
+if (reloaders.length) {
+    console.log(`  TABS.RELOAD  ${reloaders.join(', ')}: do not reload tabs from the extension (CLAUDE.md, "Reload Sekhmet no other way"); ask the user first`);
+    problems += reloaders.length;
+} else {
+    console.log('  no extension script calls tabs.reload');
+}
+
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
 const referenced = [
     ...(manifest.background ? manifest.background.scripts : []),

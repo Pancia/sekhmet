@@ -19,6 +19,13 @@ Manifest V2 extension, installed unpacked in **Brave** (not Chrome).
   before you add code that reloads a tab without a click, or remove
   `dev-reload.js` from the manifest. Reload tests in a browser go through
   `.cc/scripts/reload-test/guard.sh` only.
+- The user's Brave has well over 1,000 tabs open (1,931 on 2026-11-11), and
+  nearly all are asleep: restored but never loaded, or discarded. Code that runs
+  over many tabs must skip sleeping ones (`tab.discarded || tab.status ===
+  'unloaded'`) and cap how many it touches. Reloading, navigating, activating or
+  duplicating a sleeping tab loads it. `executeScript` and `sendMessage` do not
+  load it; they fail ("Frame with ID 0 is not ready", "Receiving end does not
+  exist"), so catch the error.
 - Browser checks: headless Google Chrome ignores `--load-extension`; headless
   Brave loads the unpacked extension. Fixture scripts that drive the content
   scripts on a fake watch page live in `.cc/scripts/browser/` (see its README).
