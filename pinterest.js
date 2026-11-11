@@ -10,11 +10,17 @@ let PinterestPeek = (function() {
     // of the pins, but Pinterest destroys pins it thinks are off screen, judged
     // by its own layout, so moved pins vanished and the copies had no buttons.
     // Marking a pin with an attribute changes nothing Pinterest relies on.
+    // Two other ideas fail for related reasons. Pinterest places pins from
+    // image sizes it stored, not from the DOM, so CSS cannot make even rows.
+    // The grid sits in an overflow:hidden box, so CSS scroll-snap inside it
+    // does not snap the page.
     const {log} = initLogger("pinterest")
 
     // Logged out every pin is a [data-grid-item="true"] straight under the
     // grid's list. Logged in is not something this could be tested against,
-    // so both the item and its grid are matched loosely.
+    // so both the item and its grid are matched loosely. pinterest.css holds
+    // back the pictures of both kinds until they carry PIN, so every one this
+    // matches must get PIN on the next pass, even when it is not used.
     const ITEM = '[data-grid-item]';
     const FALLBACK_ITEM = '[role="list"] > [role="listitem"]';
     const VEILED = 'data-sekhmet-veiled';
@@ -41,6 +47,13 @@ let PinterestPeek = (function() {
         return top >= -0.5 && bottom <= viewport + 0.5;
     }
 
+    // A pin is veiled until it has been revealed. An item with no key (no pin
+    // link and no picture, such as a card of links) can never be revealed, so
+    // it is never veiled: veiled items take no clicks.
+    function veils(key, shown) {
+        return !!key && !shown.has(key);
+    }
+
     // What the eye sees of a pin: its largest image or video, rather than the
     // card, which can keep room for a title a filter has hidden. Largest,
     // because a card can also hold small ones (an avatar, a board icon).
@@ -56,10 +69,8 @@ let PinterestPeek = (function() {
     // The box the picture sits in. The veil is drawn over it, and it is what
     // gets measured: the picture itself is faded by the veil, the box never
     // changes size or place.
-    function mediaBox(item) {
-        const media = mainMedia(item);
-        if (!media) { return null; }
-        const box = media.parentElement;
+    function mediaBox(item, media) {
+        const box = media && media.parentElement;
         return box && box !== item && box.getBoundingClientRect().height > 0 ? box : null;
     }
 
@@ -70,22 +81,21 @@ let PinterestPeek = (function() {
     // Which pin this is, across rebuilds: its link if it has one (logged out
     // it does not), else its picture with the size folder taken out, since
     // the same picture comes as 236x, 474x and so on.
-    function pinKey(item) {
+    function pinKey(item, src) {
         const href = item.querySelector('a[href*="/pin/"]')?.getAttribute('href');
         const m = href && href.match(/\/pin\/([^/?#]+)/);
         if (m) { return 'pin:' + m[1]; }
-        const src = mediaSrc(mainMedia(item));
         return src ? 'img:' + src.replace(/\/\d+x\//, '/').replace(/\/originals\//, '/') : null;
     }
 
     // The veil is the pin's own picture, blurred into a wash of its colours, on
     // a pseudo-element over the box. It needs the picture's address and a
-    // positioned box to sit in.
-    function dress(box) {
+    // positioned box to sit in. Both are read before any writes: src, and
+    // position, which is only read for a box not yet dressed.
+    function dress(box, src, position) {
         if (!box.hasAttribute(MEDIA)) {
-            box.setAttribute(MEDIA, getComputedStyle(box).position === 'static' ? 'static' : '');
+            box.setAttribute(MEDIA, position === 'static' ? 'static' : '');
         }
-        const src = mediaSrc(mainMedia(box));
         if (src && box[SRC] !== src) {
             box[SRC] = src;
             box.style.setProperty('--sekhmet-veil', `url("${src.replace(/"/g, '%22')}")`);
@@ -109,33 +119,47 @@ let PinterestPeek = (function() {
     function pass() {
         const viewport = innerHeight;
         let items = [...document.querySelectorAll(ITEM)];
-        if (!items.length) { items = [...document.querySelectorAll(FALLBACK_ITEM)]; }
+        // Fallback items not used this pass: marked "off" below, so that the
+        // stylesheet's hold lets their pictures show.
+        let unused = [];
+        if (items.length) {
+            unused = [...document.querySelectorAll(`${FALLBACK_ITEM}:not([${PIN}])`)]
+                .filter(el => !el.matches(ITEM));
+        } else {
+            items = [...document.querySelectorAll(FALLBACK_ITEM)];
+        }
 
         // Per grid: its column width, and whether it has columns at all. A
         // single-column list has nothing staggered to hide.
         const grids = new Map();
-        for (const item of items) {
+        const rects = items.map(item => item.getBoundingClientRect());
+        items.forEach((item, i) => {
             const list = gridOf(item);
             let g = grids.get(list);
             if (!g) { grids.set(list, g = { xs: new Set(), column: Infinity }); }
-            const r = item.getBoundingClientRect();
+            const r = rects[i];
             if (r.width) {
                 g.xs.add(Math.round(r.left));
                 g.column = Math.min(g.column, r.width);
             }
-        }
+        });
 
         // Read everything first, then write, so the page lays out once.
-        const plans = items.map(item => {
+        const plans = items.map((item, i) => {
             const g = grids.get(gridOf(item));
             if (g.xs.size < 2) { return { off: true }; }
-            const box = mediaBox(item);
-            const key = pinKey(item);
-            const r = (box || item).getBoundingClientRect();
-            const wide = item.getBoundingClientRect().width > g.column * WIDE_ITEM;
+            const media = mainMedia(item);
+            const box = mediaBox(item, media);
+            const src = mediaSrc(media);
+            const key = pinKey(item, src);
+            const r = box ? box.getBoundingClientRect() : rects[i];
+            const wide = rects[i].width > g.column * WIDE_ITEM;
             if (key && r.height > 0 && reveals(r.top, r.bottom, viewport, wide)) { revealed.add(key); }
-            return { box, veiled: !key || !revealed.has(key) };
+            const position = box && !box.hasAttribute(MEDIA) ? getComputedStyle(box).position : null;
+            return { box, src, position, veiled: veils(key, revealed) };
         });
+
+        for (const el of unused) { el.setAttribute(PIN, 'off'); }
 
         const fresh = [];
         items.forEach((item, i) => {
@@ -149,7 +173,7 @@ let PinterestPeek = (function() {
                 item.setAttribute(PIN, 'new');
                 fresh.push(item);
             }
-            if (plan.box) { dress(plan.box); }
+            if (plan.box) { dress(plan.box, plan.src, plan.position); }
             setAttr(item, VEILED, plan.veiled ? '' : null);
         });
         if (fresh.length) {
@@ -181,7 +205,7 @@ let PinterestPeek = (function() {
         schedule();
     }
 
-    return { init, reveals };
+    return { init, reveals, veils };
 })();
 
 PinterestPeek.init();

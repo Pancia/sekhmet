@@ -1,5 +1,5 @@
-// Tests for the one decision in pinterest.js: when a pin counts as wholly on
-// screen, which is when its veil comes off for good. The rest runs against
+// Tests for the two decisions in pinterest.js: when a pin counts as wholly on
+// screen, which is when its veil comes off for good, and which pins are veiled. The rest runs against
 // Pinterest's live DOM; .cc/scripts/pinterest-e2e.js drives that in a real
 // browser.
 const fs = require('fs');
@@ -9,7 +9,7 @@ const { group, ok, done } = require('./assert');
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'pinterest.js'), 'utf8')
     .replace(/\nPinterestPeek\.init\(\);\s*$/, '\n');
-const { reveals } = vm.runInNewContext(src + '\nPinterestPeek', {
+const { reveals, veils } = vm.runInNewContext(src + '\nPinterestPeek', {
     initLogger: () => ({ log() {}, debug() {}, error() {} })
 });
 
@@ -34,6 +34,21 @@ group('pins that could never be whole are shown at once');
 {
     ok('taller than most of the window', reveals(500, 500 + V, V, false) === true);
     ok('a wide item (the opened pin on its own page)', reveals(700, 1000, V, true) === true);
+}
+
+group('a pin is veiled until it has been revealed');
+{
+    ok('not revealed yet', veils('pin:1', new Set()) === true);
+    ok('revealed', veils('pin:1', new Set(['pin:1'])) === false);
+    ok('another pin revealed', veils('pin:1', new Set(['pin:2'])) === true);
+}
+
+group('an item with no key is never veiled');
+{
+    // No pin link and no picture: it can never be revealed, and a veiled
+    // item takes no clicks, so veiling it would leave it dead for good.
+    ok('null key', veils(null, new Set()) === false);
+    ok('null key, others revealed', veils(null, new Set(['pin:1'])) === false);
 }
 
 done();

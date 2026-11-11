@@ -9,9 +9,14 @@
 
 /* Before pinterest.js has looked at a pin, its pictures are held back. This
    stylesheet is in place before Pinterest's first paint and the script is
-   not, so without this the first screenful would show and then be veiled. */
+   not, so without this the first screenful would show and then be veiled.
+   Both item selectors in pinterest.js are held. On every pass it marks each
+   item either selector matches, "off" where it is not used, so a hold lasts
+   only until the next pass. */
 [data-grid-item]:not([data-sekhmet-pin]) img,
-[data-grid-item]:not([data-sekhmet-pin]) video {
+[data-grid-item]:not([data-sekhmet-pin]) video,
+[role="list"] > [role="listitem"]:not([data-sekhmet-pin]) img,
+[role="list"] > [role="listitem"]:not([data-sekhmet-pin]) video {
     opacity: 0 !important;
 }
 
