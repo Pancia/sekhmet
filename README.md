@@ -85,6 +85,7 @@ native host, which runs `~/dotfiles/bin/claude-p`. It only runs when pressed.
 - `x.js`: Entry point for x.com - the replies under a post get the comments treatment (blur, a 3s hold per reply, "+ 2 below"). The overlay engine does the gating; this file tags which rows are replies, since X serves two builds (logged in: `data-testid` markup in a virtualized list; logged out: a plain `<ul>` with no test ids) and the virtualized one destroys rows as you scroll. Replies are the rows after the opened post, so a reply's parent posts stay readable; the verdict, and any reveal, is kept by post id so it survives the row being rebuilt
 - `x.css` / `x-sidebar.js`: x.com's right-hand sidebar (search, trends, who to follow) is hidden on every page load and the timeline centred in its place; a tab on the right edge of the window toggles it back for the rest of the tab. The hiding is a manifest stylesheet so it lands before X's first render; the script only owns the tab
 - `thechosen.js`: watch.thechosen.tv - moves the episode sidebar ("Next Episode" and the rest of the column) from beside the player to below it. Finds the two-column layout by shape rather than by class name (the outermost flex row above the `<video>` that has a column the player is not in), tags it, and lets two CSS rules do the stacking - no DOM is reparented, because React owns those nodes. No-ops where the site's own breakpoint has already stacked the layout
+- `pinterest.js` / `pinterest.css`: On Pinterest's multi-column grids, a pin is veiled by a soft wash of its own colours (its picture, blurred hard and clipped to its box) until it has been wholly on screen once, then fades in over a second and stays shown - remembered by pin for the life of the tab, so scrolling back up does not veil it again. No half-pins peek up from below. Pins arrive already veiled, and the stylesheet holds every pin's pictures back until the script has looked at it, so nothing is seen and then covered. Pinterest's grid is otherwise untouched - its pins keep their buttons, clicks and loading. Pins that could never fit (taller than most of the window) and wide items (the opened pin on its own page) are always shown. An earlier version redrew the grid as even rows from copies of the pins; Pinterest destroys pins it thinks are off screen by its own layout, so that glitched and lost the buttons. `.cc/scripts/pinterest-e2e.js` drives it on a real logged-out page in headless Chrome
 - `allow-right-click.js`: Restores the native right-click menu on sites that suppress it (currently any host containing "solarmovie") by stopping `contextmenu` at window capture, before the page's own listeners see it. Add a site to both its `include_globs` in the manifest and `ALLOW_RIGHT_CLICK_HOSTS` in the script - the glob alone also lets the name through when it is only in the path
 - `index.js`: Main coordinator script
 - `background.js`: Background script for context menus and messaging
@@ -103,6 +104,9 @@ that once stopped the extension loading outright.
 - `test/gate.test.js`: the overlay gates' cooldown, path and navigation rules,
   run against function bodies lifted out of `overlays.js` by name rather than
   copied - so a rename fails loudly instead of testing a stale duplicate
+
+- `test/pinterest.test.js`: when a pin counts as wholly on screen (and its veil
+  comes off), and which are shown at once
 
 They stub the browser rather than drive one, so they cover decisions, not
 rendering. Anything about how an overlay actually looks still needs the browser.

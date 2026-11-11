@@ -52,6 +52,13 @@
             "all_frames": false
         },
         {
+            "matches": ["*://*.pinterest.com/*", "*://*.pinterest.ca/*", "*://*.pinterest.co.uk/*"],
+            "css": ["pinterest.css"],
+            "js": ["polyfill.js", "lib.js", "pinterest.js"],
+            "run_at": "document_end",
+            "all_frames": false
+        },
+        {
             "matches": ["*://watch.thechosen.tv/*"],
             "js": ["polyfill.js", "lib.js", "thechosen.js"],
             "run_at": "document_end",

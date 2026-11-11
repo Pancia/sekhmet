@@ -1,0 +1,52 @@
+/* Pinterest: a pin is veiled - covered by a soft wash of its own colours -
+   until it has been wholly on screen once, then fades in over a second and
+   stays. pinterest.js decides which, and finds the box each picture sits in.
+
+   The veil is the picture itself, blurred hard and enlarged so the blur's
+   soft edges fall outside the box, on a pseudo-element clipped to the box.
+   Nothing here changes a size or a position: pinterest.js measures these
+   boxes, and Pinterest lays out the pins. */
+
+/* Before pinterest.js has looked at a pin, its pictures are held back. This
+   stylesheet is in place before Pinterest's first paint and the script is
+   not, so without this the first screenful would show and then be veiled. */
+[data-grid-item]:not([data-sekhmet-pin]) img,
+[data-grid-item]:not([data-sekhmet-pin]) video {
+    opacity: 0 !important;
+}
+
+[data-sekhmet-media] {
+    overflow: hidden !important;
+}
+[data-sekhmet-media="static"] {
+    position: relative !important;
+}
+[data-sekhmet-media]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--sekhmet-veil) center / cover no-repeat, rgba(127, 127, 127, 0.2);
+    filter: blur(28px) saturate(1.4);
+    transform: scale(1.6);
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Even and unhurried. Only once a pin is "ready" (its second frame), so one
+   that arrives veiled is veiled from its first paint. */
+[data-sekhmet-pin="ready"] [data-sekhmet-media]::after,
+[data-sekhmet-pin="ready"] img,
+[data-sekhmet-pin="ready"] video {
+    transition: opacity 1000ms ease-in-out;
+}
+
+[data-sekhmet-veiled] [data-sekhmet-media]::after {
+    opacity: 1;
+}
+[data-sekhmet-veiled] img,
+[data-sekhmet-veiled] video {
+    opacity: 0 !important;
+}
+[data-sekhmet-veiled] {
+    pointer-events: none !important;
+}
