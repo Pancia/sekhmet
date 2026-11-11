@@ -934,14 +934,14 @@ let initializeFeelingTracker = (function() {
 
                 const container = document.createElement("div");
                 container.id = "sekhmet-ft-status-container";
-                container.style.display = "inline-block";
+                container.style.display = "flex";
                 container.style.position = "relative";
-                container.style.marginRight = "8px";
 
                 statusButton = document.createElement("a");
                 statusButton.textContent = "🧭";
                 statusButton.id = "sekhmet-ft-status";
-                statusButton.style.fontSize = "32px";
+                statusButton.style.fontSize = "28px";
+                statusButton.style.lineHeight = "1";
                 statusButton.style.cursor = "pointer";
                 statusButton.style.userSelect = "none";
                 statusButton.title = "Feeling tracker: loading...";
@@ -962,9 +962,9 @@ let initializeFeelingTracker = (function() {
                 container.appendChild(statusButton);
                 container.appendChild(dot);
 
-                const endContainer = document.querySelector("#center.ytd-masthead");
-                if (endContainer) {
-                    endContainer.prepend(container);
+                const pill = mastheadPill();
+                if (pill) {
+                    pill.prepend(container);
                 }
 
                 updateStatusButton();

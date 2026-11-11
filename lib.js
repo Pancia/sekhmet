@@ -87,6 +87,37 @@ function waitForElementToBeLoaded(selector, callback, elementTest, config) {
     };
 }
 
+// The pill the masthead buttons share - the 🧭 feeling tracker and the 📽️
+// downloader. They are built by different modules at different times, so
+// whichever gets there first makes it and the other joins. Each places itself
+// (the compass prepends, the projector appends) so the order does not depend
+// on which one won. YouTube's own chip colours, so it follows light and dark.
+function mastheadPill() {
+    const existing = document.getElementById("sekhmet-masthead-pill");
+    if (existing) { return existing; }
+
+    const center = document.querySelector("#center.ytd-masthead");
+    if (!center) { return null; }
+
+    const pill = document.createElement("div");
+    pill.id = "sekhmet-masthead-pill";
+    pill.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+        height: 44px;
+        padding: 0 14px;
+        margin-right: 12px;
+        box-sizing: border-box;
+        border-radius: 9999px;
+        background: var(--yt-spec-badge-chip-background, rgba(128, 128, 128, 0.15));
+        border: 1px solid var(--yt-spec-10-percent-layer, rgba(128, 128, 128, 0.25));
+    `;
+    center.prepend(pill);
+    return pill;
+}
+
 // Focus can sit inside a shadow root, in which case document.activeElement
 // reports the host rather than the focused node. Walk down to the real one.
 function deepActiveElement() {

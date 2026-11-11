@@ -104,23 +104,28 @@ function initializeYTDL() {
     // Add a single download button near avatar that opens a dialog with download options
     waitForElementToBeLoaded("#center.ytd-masthead", () => {
         waitForElementToBeLoaded("#avatar-btn", () => {
-            document.querySelectorAll("#ytdl").forEach(i => i.remove());
+            // The container too, not just the button: removing only #ytdl left
+            // an empty div behind on every rebuild.
+            document.querySelectorAll("#ytdl-container, #ytdl").forEach(i => i.remove());
 
             const ytdlContainer = document.createElement("div");
+            ytdlContainer.id = "ytdl-container";
+            ytdlContainer.style.display = "flex";
 
             const downloadBtn = document.createElement("a");
             downloadBtn.textContent = "📽️";
             downloadBtn.id = "ytdl";
             downloadBtn.style.color = "red";
-            downloadBtn.style.fontSize = "32px";
+            downloadBtn.style.fontSize = "28px";
+            downloadBtn.style.lineHeight = "1";
             downloadBtn.style.cursor = "pointer";
             downloadBtn.addEventListener("click", openDownloadDialog);
 
             ytdlContainer.appendChild(downloadBtn);
 
-            const endContainer = document.querySelector("#center.ytd-masthead");
-            if (endContainer) {
-                endContainer.prepend(ytdlContainer);
+            const pill = mastheadPill();
+            if (pill) {
+                pill.append(ytdlContainer);
             }
         });
     });
